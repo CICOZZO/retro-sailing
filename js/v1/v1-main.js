@@ -1,22 +1,33 @@
 /**
- * SAILING (1983 - DYNETRON) - ENTRADA PRINCIPAL E CONTROLES (VERSÃO 1)
+ * SAILING (1983 - DYNETRON COMPANY)
+ * Input Handling, Main Loop & Responsive Canvas (Versão 1)
  */
 
 document.addEventListener('DOMContentLoaded', () => {
   const canvas = document.getElementById('v1GameCanvas');
   if (!canvas) return;
 
+  // Set internal resolution to exact 320x200 CGA
+  canvas.width = 320;
+  canvas.height = 200;
+
   const game = new V1Game();
   window.v1Game = game;
   const renderer = new V1Renderer(canvas);
+  window.v1Renderer = renderer;
 
   const keys = {};
 
-  // 1. Escuta de Teclado
-  window.addEventListener('keydown', (e) => {
+  // Audio activation helper on first interaction
+  function unlockAudio() {
     if (window.v1Audio) window.v1Audio.resume();
+  }
 
+  // 1. Keyboard Input Handling
+  window.addEventListener('keydown', (e) => {
+    unlockAudio();
     keys[e.code] = true;
+
     const keyUpper = (e.key || '').toUpperCase();
     const code = e.code;
 
@@ -29,10 +40,25 @@ document.addEventListener('DOMContentLoaded', () => {
     const isH = keyUpper === 'H' || code === 'KeyH';
     const isG = keyUpper === 'G' || code === 'KeyG';
     const isA = keyUpper === 'A' || code === 'KeyA';
+    const isT = keyUpper === 'T' || code === 'KeyT';
+    const isM = keyUpper === 'M' || code === 'KeyM';
 
-    // Comandos de Menu (da Foto 5)
+    // Telemetry HUD Toggle
+    if (isT) {
+      const active = renderer.toggleTelemetry();
+      if (window.v1Audio) window.v1Audio.beepClick();
+      return;
+    }
+
+    // Audio Mute Toggle
+    if (isM) {
+      if (window.v1Audio) window.v1Audio.toggleMute();
+      return;
+    }
+
+    // State-specific actions
     if (game.state === 'TITLE') {
-      if (isB) {
+      if (isB || code === 'Space' || code === 'Enter') {
         game.startCampaign();
       } else if (isP) {
         game.startPractice();
@@ -42,36 +68,33 @@ document.addEventListener('DOMContentLoaded', () => {
         game.showInstructions('A');
       } else if (isO || isC || isS || isH || isG) {
         game.showInstructions(keyUpper);
-      } else if (e.code === 'Space' || e.code === 'Enter') {
-        game.startCampaign();
       }
     } else if (game.state === 'INSTRUCTIONS') {
-      if (e.code === 'Space' || e.code === 'Enter' || e.code === 'Escape' || isB) {
+      if (code === 'Space' || code === 'Enter' || code === 'Escape' || isB) {
         game.nextInstruction();
       }
     } else if (game.state === 'LEG_INTRO') {
-      // Qualquer tecla avança imediatamente para jogar
       game.beginPlaying();
     } else if (game.state === 'LEG_COMPLETE') {
-      if (e.code === 'Space' || e.code === 'Enter') {
+      if (code === 'Space' || code === 'Enter') {
         game.advanceToNextLeg();
       }
     } else if (game.state === 'VICTORY' || game.state === 'GAMEOVER') {
-      if (e.code === 'Space' || e.code === 'Enter' || e.code === 'Escape') {
+      if (code === 'Space' || code === 'Enter' || code === 'Escape') {
         game.state = 'TITLE';
       }
     }
-
-    if (e.code === 'KeyM') {
-      if (window.v1Audio) window.v1Audio.toggleMute();
-    }
   });
 
-  // Mapeamento de cliques do mouse diretamente sobre a tela do jogo (Canvas)
+  window.addEventListener('keyup', (e) => {
+    keys[e.code] = false;
+  });
+
+  // 2. Mouse / Touch on Canvas
   function getCanvasCoords(e) {
     const rect = canvas.getBoundingClientRect();
-    const scaleX = canvas.width / rect.width;
-    const scaleY = canvas.height / rect.height;
+    const scaleX = 320 / rect.width;
+    const scaleY = 200 / rect.height;
     return {
       x: (e.clientX - rect.left) * scaleX,
       y: (e.clientY - rect.top) * scaleY
@@ -79,27 +102,17 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   canvas.addEventListener('click', (e) => {
-    if (window.v1Audio) window.v1Audio.resume();
+    unlockAudio();
     const pt = getCanvasCoords(e);
 
     if (game.state === 'TITLE') {
       const opt = renderer.getMenuOptionAt(pt.x, pt.y);
-      if (opt === 'B') {
-        game.startCampaign();
-      } else if (opt === 'P') {
-        game.startPractice();
-      } else if (opt === 'X') {
-        window.location.href = 'versao2.html';
-      } else if (opt === 'A') {
-        game.showInstructions('A');
-      } else if (opt) {
-        game.showInstructions(opt);
-      } else {
-        // Se clicar em qualquer lugar do quadrante esquerdo, inicia a campanha
-        if (pt.x <= 394) {
-          game.startCampaign();
-        }
-      }
+      if (opt === 'B') game.startCampaign();
+      else if (opt === 'P') game.startPractice();
+      else if (opt === 'T') renderer.toggleTelemetry();
+      else if (opt === 'A') game.showInstructions('A');
+      else if (opt) game.showInstructions(opt);
+      else if (pt.x <= 192) game.startCampaign();
     } else if (game.state === 'INSTRUCTIONS') {
       game.nextInstruction();
     } else if (game.state === 'LEG_INTRO') {
@@ -115,9 +128,9 @@ document.addEventListener('DOMContentLoaded', () => {
     const pt = getCanvasCoords(e);
     if (game.state === 'TITLE') {
       const opt = renderer.getMenuOptionAt(pt.x, pt.y);
-      canvas.style.cursor = (opt || pt.x <= 394) ? 'pointer' : 'default';
+      canvas.style.cursor = (opt || pt.x <= 192) ? 'pointer' : 'default';
       renderer.hoveredMenuOption = opt;
-    } else if (game.state === 'LEG_INTRO' || game.state === 'INSTRUCTIONS' || game.state === 'LEG_COMPLETE') {
+    } else if (game.state !== 'PLAYING') {
       canvas.style.cursor = 'pointer';
       renderer.hoveredMenuOption = null;
     } else {
@@ -131,17 +144,13 @@ document.addEventListener('DOMContentLoaded', () => {
     canvas.style.cursor = 'default';
   });
 
-  window.addEventListener('keyup', (e) => {
-    keys[e.code] = false;
-  });
-
-  // 2. Controle Contínuo de Leme e Vela
+  // 3. Continuous Rudder & Sheet Control
   function processInputs(dt) {
     if (game.state !== 'PLAYING') return;
 
     const boat = game.boat;
 
-    // Leme (Esquerda / Direita)
+    // Rudder (Port / Starboard)
     if (keys['ArrowLeft'] || keys['KeyA']) {
       boat.rudderAngle = -1;
     } else if (keys['ArrowRight'] || keys['KeyD']) {
@@ -150,41 +159,42 @@ document.addEventListener('DOMContentLoaded', () => {
       boat.rudderAngle = 0;
     }
 
-    // Regulagem da Vela (Caçar / Filar)
-    const trimSpeed = 45.0 * dt;
+    // Sail Sheet (Trim in / Ease out)
+    const sheetSpeed = 38.0 * dt;
     if (keys['ArrowUp'] || keys['KeyW']) {
-      boat.sailTrim = Math.max(8, boat.sailTrim - trimSpeed);
-      if (Math.random() < 0.2 && window.v1Audio) window.v1Audio.beepClick();
+      const old = boat.sheetAngle;
+      boat.sheetAngle = Math.max(10, boat.sheetAngle - sheetSpeed);
+      if (Math.abs(old - boat.sheetAngle) > 1.2 && Math.random() < 0.25 && window.v1Audio) {
+        window.v1Audio.sheetClick();
+      }
     }
     if (keys['ArrowDown'] || keys['KeyS']) {
-      boat.sailTrim = Math.min(85, boat.sailTrim + trimSpeed);
-      if (Math.random() < 0.2 && window.v1Audio) window.v1Audio.beepClick();
+      const old = boat.sheetAngle;
+      boat.sheetAngle = Math.min(85, boat.sheetAngle + sheetSpeed);
+      if (Math.abs(old - boat.sheetAngle) > 1.2 && Math.random() < 0.25 && window.v1Audio) {
+        window.v1Audio.sheetClick();
+      }
     }
   }
 
-  // 3. Controles On-Screen / Touch para facilitar
+  // 4. Quick Action Bar Buttons in DOM
   function setupKeyBtn(btnId, code, keyChar) {
     const btn = document.getElementById(btnId);
     if (!btn) return;
 
     btn.addEventListener('click', (e) => {
       e.preventDefault();
-      if (window.v1Audio) window.v1Audio.resume();
+      unlockAudio();
 
       if (keyChar === 'B') {
-        if (game.state === 'TITLE' || game.state === 'INSTRUCTIONS') {
-          game.startCampaign();
-        } else if (game.state === 'LEG_INTRO') {
-          game.beginPlaying();
-        } else if (game.state === 'VICTORY' || game.state === 'GAMEOVER') {
-          game.startCampaign();
-        }
+        if (game.state === 'TITLE' || game.state === 'INSTRUCTIONS') game.startCampaign();
+        else if (game.state === 'LEG_INTRO') game.beginPlaying();
+        else if (game.state === 'VICTORY' || game.state === 'GAMEOVER') game.startCampaign();
       } else if (keyChar === 'P') {
-        if (game.state === 'TITLE' || game.state === 'INSTRUCTIONS') {
-          game.startPractice();
-        } else if (game.state === 'LEG_INTRO') {
-          game.beginPlaying();
-        }
+        if (game.state === 'TITLE' || game.state === 'INSTRUCTIONS') game.startPractice();
+        else if (game.state === 'LEG_INTRO') game.beginPlaying();
+      } else if (keyChar === 'T') {
+        renderer.toggleTelemetry();
       } else if (keyChar) {
         game.showInstructions(keyChar);
       } else if (code === 'Space') {
@@ -202,16 +212,17 @@ document.addEventListener('DOMContentLoaded', () => {
   setupKeyBtn('btnV1Obj', null, 'O');
   setupKeyBtn('btnV1Hazards', null, 'H');
   setupKeyBtn('btnV1Controls', null, 'C');
+  setupKeyBtn('btnV1Telemetry', null, 'T');
   setupKeyBtn('btnV1Space', 'Space', null);
 
-  // Botões de D-Pad de toque
+  // 5. Touch / D-Pad Buttons in DOM
   function setupTouchDpad(id, pressCode) {
     const el = document.getElementById(id);
     if (!el) return;
 
     const onStart = (e) => {
       e.preventDefault();
-      if (window.v1Audio) window.v1Audio.resume();
+      unlockAudio();
       keys[pressCode] = true;
     };
     const onEnd = (e) => {
@@ -231,7 +242,7 @@ document.addEventListener('DOMContentLoaded', () => {
   setupTouchDpad('v1PadUp', 'ArrowUp');
   setupTouchDpad('v1PadDown', 'ArrowDown');
 
-  // 4. Loop Principal
+  // 6. Main Game Loop
   let lastTime = performance.now();
 
   function gameLoop(now) {
@@ -240,7 +251,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     processInputs(dt);
     game.update(dt);
-    renderer.render(game);
+    renderer.render(game, dt);
 
     requestAnimationFrame(gameLoop);
   }

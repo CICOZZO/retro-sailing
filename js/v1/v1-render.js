@@ -1,898 +1,665 @@
 /**
- * SAILING (1983 - DYNETRON) - RENDERIZADOR GRÁFICO CGA 320x200
- * Renderização pixel-perfect dos 3 quadrantes idêntica às fotos originais.
+ * SAILING (1983 - DYNETRON COMPANY)
+ * Authentic CGA 320x200 Mode 4 Raster Renderer (Versão 1)
+ *
+ * Direct framebuffer rasterization locked to CGA Palette 0:
+ * 0 = Black (#000000)
+ * 1 = Green (#00aa00)
+ * 2 = Red   (#aa0000)
+ * 3 = Brown (#aa5500)
  */
 
 class V1Renderer {
   constructor(canvas) {
     this.canvas = canvas;
-    this.ctx = canvas.getContext('2d');
+    this.cga = new V1CGA(canvas);
 
-    // Paleta Oficial CGA IBM PC (Modo 4 / Gráficos de 1983)
-    this.colors = {
-      black: '#000000',
-      green: '#00aa00',       // Verde clássico das ilhas
-      brightGreen: '#55ff55',
-      red: '#aa0000',         // Casco vermelho do veleiro
-      brightRed: '#ff5555',
-      orange: '#b85c00',      // Moldura e borda CGA (CGA Brown/Orange)
-      yellow: '#ffaa00',      // Vela, bóias e náufragos
-      white: '#ffffff'
-    };
-
-    this.blinkState = true;
-    setInterval(() => { this.blinkState = !this.blinkState; }, 400);
+    this.blinkTimer = 0;
+    this.blinkOn = true;
+    this.showTelemetry = false; // Toggle with 'T'
+    this.hoveredMenuOption = null;
   }
 
-  render(game) {
-    const ctx = this.ctx;
-    const w = this.canvas.width;
-    const h = this.canvas.height;
+  toggleTelemetry() {
+    this.showTelemetry = !this.showTelemetry;
+    return this.showTelemetry;
+  }
 
-    // Limpa a tela inteira com a moldura marrom/laranja
-    ctx.fillStyle = this.colors.orange;
-    ctx.fillRect(0, 0, w, h);
+  render(game, dt = 0.016) {
+    this.blinkTimer += dt;
+    if (this.blinkTimer > 0.35) {
+      this.blinkTimer = 0;
+      this.blinkOn = !this.blinkOn;
+    }
 
-    // Dimensões dos 3 Quadrantes (Exatamente conforme as fotos):
-    // Quadrante Esquerdo (Mapa Principal): 60% de largura
-    const q1X = 14;
-    const q1Y = 14;
-    const q1W = 380;
-    const q1H = 372;
+    const cga = this.cga;
+    cga.clear(0);
 
-    // Quadrante Superior Direito (Close do Barco):
-    const q2X = 404;
-    const q2Y = 14;
-    const q2W = 222;
-    const q2H = 216;
+    // 1. Draw outer CRT bezel and dividing frames (Brown = 3)
+    this.renderBezelLayout(cga, game);
 
-    // Quadrante Inferior Direito (Radar Estratégico):
-    const q3X = 404;
-    const q3Y = 244;
-    const q3W = 222;
-    const q3H = 142;
+    // 2. Render Top-Right Quadrant: Wind-relative boat close-up (x: 200, y: 8, w: 112, h: 102)
+    this.renderBoatCloseUp(cga, 200, 8, 112, 102, game);
 
-    // 1. Renderiza Quadrante Superior Direito (Close do Veleiro)
-    this.renderBoatCloseUp(ctx, q2X, q2Y, q2W, q2H, game);
+    // 3. Render Center-Right: Tiller / Rudder gauge (x: 200, y: 112, w: 112, h: 14)
+    this.renderTillerGauge(cga, 200, 112, 112, 14, game);
 
-    // 2. Renderiza Quadrante Inferior Direito (Radar Global do Triângulo)
-    this.renderStrategicRadar(ctx, q3X, q3Y, q3W, q3H, game);
+    // 4. Render Bottom-Right: Tactical radar & instruments (x: 200, y: 128, w: 112, h: 62)
+    this.renderRadarAndInstruments(cga, 200, 128, 112, 62, game);
 
-    // 3. Renderiza Quadrante Esquerdo de acordo com o estado do jogo
+    // 5. Render Left Quadrant: Sector Map or Title / Instructions (x: 8, y: 8, w: 184, h: 182)
     if (game.state === 'TITLE') {
-      this.renderTitleScreen(ctx, q1X, q1Y, q1W, q1H);
+      this.renderTitleScreen(cga, 8, 8, 184, 182, game);
     } else if (game.state === 'INSTRUCTIONS') {
-      this.renderInstructionScreen(ctx, q1X, q1Y, q1W, q1H, game);
-    } else if (game.state === 'PLAYING' || game.state === 'LEG_INTRO' || game.state === 'LEG_COMPLETE') {
-      this.renderMainMapView(ctx, q1X, q1Y, q1W, q1H, game);
-
-      // Sobreposições de Etapa
-      if (game.state === 'LEG_INTRO') {
-        this.renderLegIntroModal(ctx, q1X, q1Y, q1W, q1H, game);
-      } else if (game.state === 'LEG_COMPLETE') {
-        this.renderLegCompleteModal(ctx, q1X, q1Y, q1W, q1H, game);
+      this.renderInstructions(cga, 8, 8, 184, 182, game);
+    } else if (game.state === 'LEG_INTRO') {
+      this.renderMainMapView(cga, 8, 8, 184, 182, game);
+      this.renderModal(cga, 8, 8, 184, 182, [
+        `LEG ${game.leg} OF 3`,
+        "",
+        game.map.ports[game.leg].name,
+        "",
+        "RESCUE CASTAWAYS &",
+        "NAVIGATE TO PORT",
+        "",
+        "[PRESS ANY KEY / CLICK]"
+      ], 3);
+    } else if (game.state === 'PLAYING') {
+      this.renderMainMapView(cga, 8, 8, 184, 182, game);
+      if (this.showTelemetry) {
+        this.renderTelemetryHUD(cga, 10, 10, game);
       }
+    } else if (game.state === 'LEG_COMPLETE') {
+      this.renderMainMapView(cga, 8, 8, 184, 182, game);
+      this.renderModal(cga, 8, 8, 184, 182, [
+        "HARBOUR REACHED!",
+        "",
+        `LEG ${game.leg} COMPLETE`,
+        `TIME BONUS: +${Math.max(0, 300 - Math.floor(game.elapsedTime)) * 10}`,
+        "",
+        "[SPACE / CLICK NEXT LEG]"
+      ], 1);
     } else if (game.state === 'VICTORY') {
-      this.renderVictoryScreen(ctx, q1X, q1Y, q1W, q1H, game);
+      this.renderMainMapView(cga, 8, 8, 184, 182, game);
+      this.renderModal(cga, 8, 8, 184, 182, [
+        "*** VICTORY! ***",
+        "",
+        "TRIANGLE CONQUERED!",
+        `FINAL SCORE: ${game.score}`,
+        "",
+        "YOU ARE A MASTER SAILOR",
+        "",
+        "[SPACE / CLICK TITLE]"
+      ], 1);
     } else if (game.state === 'GAMEOVER') {
-      this.renderGameOverScreen(ctx, q1X, q1Y, q1W, q1H, game);
+      this.renderMainMapView(cga, 8, 8, 184, 182, game);
+      this.renderModal(cga, 8, 8, 184, 182, [
+        "* SHIPWRECKED *",
+        "",
+        "YOUR BOAT WAS LOST",
+        "IN THE BERMUDA TRIANGLE",
+        `FINAL SCORE: ${game.score}`,
+        "",
+        "[SPACE / CLICK TITLE]"
+      ], 2);
     }
+
+    // 6. Bottom Bezel status line (y: 192)
+    this.renderBottomStatus(cga, game);
+
+    // Present indexed buffer to canvas
+    cga.present();
   }
 
-  /**
-   * QUADRANTE ESQUERDO: Mapa de Navegação Principal em tempo real
-   */
-  renderMainMapView(ctx, x, y, w, h, game) {
-    ctx.save();
-    ctx.beginPath();
-    ctx.rect(x, y, w, h);
-    ctx.clip();
+  // ------------------------------------------------------------- BEZEL LAYOUT
+  renderBezelLayout(cga, game) {
+    // Outer border (Brown = 3)
+    cga.rect(0, 0, 320, 200, 3);
+    cga.rect(1, 1, 318, 198, 3);
 
-    // Fundo do Mar Negro
-    ctx.fillStyle = this.colors.black;
-    ctx.fillRect(x, y, w, h);
+    // Left Quadrant frame (x: 6, y: 6, w: 188, h: 185)
+    cga.rect(6, 6, 188, 185, 3);
 
-    // Câmera centrada no veleiro do jogador
-    const camX = game.boat.x - w / 2;
-    const camY = game.boat.y - h / 2;
+    // Top-Right Quadrant frame (x: 198, y: 6, w: 116, h: 105)
+    cga.rect(198, 6, 116, 105, 3);
 
-    // 0. Efeito dinâmico de vento e marolas na água
-    ctx.strokeStyle = '#005522'; // Verde escuro CGA para marolas
-    ctx.lineWidth = 1;
-    const blowRad = (((game.windDir || 0) + 180) % 360) * (Math.PI / 180);
-    const wx = Math.sin(blowRad);
-    const wy = -Math.cos(blowRad);
-
-    for (const p of (game.map?.windParticles || [])) {
-      const scrX = p.x - camX + x;
-      const scrY = p.y - camY + y;
-      if (scrX > x && scrX < x + w && scrY > y && scrY < y + h) {
-        ctx.beginPath();
-        ctx.moveTo(scrX, scrY);
-        ctx.lineTo(scrX + wx * p.len, scrY + wy * p.len);
-        ctx.stroke();
-      }
+    // Red arrows along top bezel of boat close-up (Authentic Dynetron detail!)
+    for (let x = 208; x <= 304; x += 16) {
+      cga.line(x, 4, x, 7, 2);
+      cga.pset(x - 1, 5, 2);
+      cga.pset(x + 1, 5, 2);
     }
 
-    // Rastro de espuma da popa do barco (Wake)
-    ctx.fillStyle = this.colors.white;
-    for (const wk of (game.boat?.wake || [])) {
-      const sx = wk.x - camX + x;
-      const sy = wk.y - camY + y;
-      if (sx > x && sx < x + w && sy > y && sy < y + h) {
-        const sz = Math.max(1, Math.round(wk.life * 3));
-        ctx.fillRect(sx - sz / 2, sy - sz / 2, sz, sz);
-      }
-    }
+    // Tiller bar frame (x: 198, y: 111, w: 116, h: 16)
+    cga.rect(198, 111, 116, 16, 3);
 
-    // A. Ilhas e Litoral em blocos verdes CGA pixelados
-    ctx.fillStyle = this.colors.green;
-    for (const isl of (game.map?.islands || [])) {
-      const scrX = isl.x - camX + x;
-      const scrY = isl.y - camY + y;
-      // Desenha com textura de blocos com degraus
-      this.drawBlockyCoastline(ctx, scrX, scrY, isl.w, isl.h);
-    }
+    // Bottom-Right Quadrant frame (x: 198, y: 127, w: 116, h: 64)
+    cga.rect(198, 127, 116, 64, 3);
 
-    // B. Recifes de pedra
-    ctx.fillStyle = this.colors.orange;
-    for (const r of (game.map?.reefs || [])) {
-      const rx = r.x - camX + x;
-      const ry = r.y - camY + y;
-      if (rx > x - 30 && rx < x + w + 30 && ry > y - 30 && ry < y + h + 30) {
-        ctx.beginPath();
-        ctx.arc(rx, ry, r.r, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.fillStyle = this.colors.black;
-        ctx.fillRect(rx - 4, ry - 4, 8, 8);
-        ctx.fillStyle = this.colors.orange;
-      }
-    }
-
-    // C. Porto de Destino da Etapa
-    const curPort = game.map?.ports?.[game.leg];
-    if (curPort) {
-      const px = curPort.x - camX + x;
-      const py = curPort.y - camY + y;
-      ctx.fillStyle = this.blinkState ? this.colors.yellow : this.colors.brightGreen;
-      ctx.fillRect(px, py, curPort.w, curPort.h);
-      ctx.fillStyle = this.colors.black;
-      ctx.font = 'bold 12px monospace';
-      ctx.fillText("PORTO", px + 6, py + 28);
-    }
-
-    // D. Náufragos e Balsas de Sobreviventes
-    for (const s of (game.map?.swimmers || [])) {
-      if (!s.rescued) {
-        const sx = s.x - camX + x;
-        const sy = s.y - camY + y;
-        if (sx > x - 20 && sx < x + w + 20 && sy > y - 20 && sy < y + h + 20) {
-          // Ícone da balsa laranja / náufrago
-          ctx.fillStyle = this.colors.yellow;
-          ctx.fillRect(sx - 7, sy - 7, 14, 14);
-          ctx.fillStyle = this.colors.red;
-          ctx.fillRect(sx - 3, sy - 3, 6, 6);
-          // Braços acenando
-          if (this.blinkState) {
-            ctx.fillStyle = this.colors.white;
-            ctx.fillRect(sx - 9, sy - 9, 3, 3);
-            ctx.fillRect(sx + 6, sy - 9, 3, 3);
-          }
-        }
-      }
-    }
-
-    // E. Perigos Ativos
-    for (const hzd of (game.map?.hazards || [])) {
-      const hx = hzd.x - camX + x;
-      const hy = hzd.y - camY + y;
-
-      if (hzd.type === 'shark') {
-        // Barbatana de tubarão
-        ctx.fillStyle = this.colors.brightRed;
-        ctx.beginPath();
-        ctx.moveTo(hx, hy - 8);
-        ctx.lineTo(hx + 8, hy + 6);
-        ctx.lineTo(hx - 8, hy + 6);
-        ctx.closePath();
-        ctx.fill();
-      } else if (hzd.type === 'speedboat') {
-        // Lancha veloz
-        ctx.fillStyle = this.colors.white;
-        ctx.fillRect(hx - 12, hy - 5, 24, 10);
-        ctx.fillStyle = this.colors.red;
-        ctx.fillRect(hx + (hzd.vx > 0 ? 8 : -12), hy - 3, 6, 6);
-      } else if (hzd.type === 'whirlwind') {
-        // Redemoinho dimensional rotativo
-        ctx.strokeStyle = this.blinkState ? this.colors.yellow : this.colors.brightGreen;
-        ctx.lineWidth = 2;
-        ctx.beginPath();
-        ctx.arc(hx, hy, hzd.r, hzd.rot, hzd.rot + Math.PI * 1.5);
-        ctx.stroke();
-        ctx.beginPath();
-        ctx.arc(hx, hy, hzd.r * 0.5, -hzd.rot, -hzd.rot + Math.PI * 1.5);
-        ctx.stroke();
-      } else if (hzd.type === 'mist') {
-        // Névoa rastejante em pontilhado dither
-        ctx.fillStyle = 'rgba(0, 170, 0, 0.28)';
-        ctx.fillRect(hx, hy, hzd.w, hzd.h);
-      } else if (hzd.type === 'alien_anomaly') {
-        // Nuvem de Partículas da Entidade Cristalina (como na Foto 4!)
-        for (const p of hzd.particles) {
-          ctx.fillStyle = p.color;
-          ctx.fillRect(hx + p.rx, hy + p.ry, 3, 3);
-        }
-      }
-    }
-
-    // F. O Veleiro do Jogador (Ícone no Mapa Principal)
-    const boatScrX = w / 2 + x;
-    const boatScrY = h / 2 + y;
-    this.drawPlayerMapBoat(ctx, boatScrX, boatScrY, game.boat);
-
-    // G. Faixa Ornamental Inferior de Perigo (da Foto 1)
-    this.drawHazardBorderPattern(ctx, x, y + h - 22, w);
-
-    // H. Mensagem de Rádio Narrativa (quando resgata sobrevivente)
-    if (game.radioMessage) {
-      ctx.fillStyle = 'rgba(0, 0, 0, 0.85)';
-      ctx.fillRect(x + 10, y + 10, w - 20, 36);
-      ctx.strokeStyle = this.colors.orange;
-      ctx.strokeRect(x + 10, y + 10, w - 20, 36);
-
-      ctx.fillStyle = this.colors.yellow;
-      ctx.font = 'bold 13px monospace';
-      ctx.textAlign = 'center';
-      ctx.fillText(game.radioMessage, x + w / 2, y + 32);
-    }
-
-    ctx.restore();
+    // Bottom separator line (y: 191)
+    cga.line(0, 191, 319, 191, 3);
   }
 
-  getCompassDirName(deg) {
-    const d = (((deg || 0) % 360) + 360) % 360;
-    if (d >= 337.5 || d < 22.5) return 'N';
-    if (d >= 22.5 && d < 67.5) return 'NE';
-    if (d >= 67.5 && d < 112.5) return 'E';
-    if (d >= 112.5 && d < 157.5) return 'SE';
-    if (d >= 157.5 && d < 202.5) return 'S';
-    if (d >= 202.5 && d < 247.5) return 'SW';
-    if (d >= 247.5 && d < 292.5) return 'W';
-    return 'NW';
-  }
+  // ----------------------------------------------------- TOP-RIGHT BOAT CLOSE-UP
+  renderBoatCloseUp(cga, x, y, w, h, game) {
+    cga.fill(x, y, w, h, 0);
 
-  /**
-   * QUADRANTE SUPERIOR DIREITO: Close do Veleiro, Regulagem da Vela e Indicador de Vento
-   */
-  renderBoatCloseUp(ctx, x, y, w, h, game) {
-    ctx.save();
-    // Borda preta interna
-    ctx.fillStyle = this.colors.black;
-    ctx.fillRect(x, y, w, h);
+    const cx = x + Math.floor(w / 2);
+    const cy = y + Math.floor(h / 2);
+    const boat = game.boat;
 
-    const centerX = x + w / 2;
-    const centerY = y + h / 2 - 8;
+    // Relative wind angle off the bow:
+    // In this display, WIND BLOWS DOWNWARDS from the top bezel (red arrows indicate wind flow).
+    // The boat's heading relative to the wind:
+    // When heading into the wind, bow points UP (angle = 0).
+    // When running with wind, bow points DOWN (angle = 180).
+    const relWindDeg = -boat.apparentWindAngle; // Invert so port/stbd match visual orientation
+    const relRad = relWindDeg * (Math.PI / 180);
 
-    // Cabeçalho: Leitura do Vento e Direção
-    const dirName = this.getCompassDirName(game.windDir);
-    ctx.fillStyle = this.colors.yellow;
-    ctx.font = 'bold 12px monospace';
-    ctx.textAlign = 'center';
-    ctx.fillText(`VENTO: ${Math.round(game.windSpeed)} NÓS [${dirName}]`, centerX, y + 16);
+    const cosH = Math.cos(relRad);
+    const sinH = Math.sin(relRad);
 
-    // A. Setas Verticais de Vento nas laterais (Vermelhas animadas - da Foto 1)
-    ctx.fillStyle = this.colors.red;
-    ctx.strokeStyle = this.colors.red;
-    ctx.lineWidth = 3;
+    // Transform local boat coordinates to screen coordinates
+    const toScreen = (lx, ly) => ({
+      x: Math.round(cx + lx * cosH - ly * sinH),
+      y: Math.round(cy + lx * sinH + ly * cosH)
+    });
 
-    // Se o vento sopra para o Norte (metade superior) ou Sul
-    const isBlowingNorth = Math.cos((game.windDir + 180) * (Math.PI / 180)) >= 0;
-    const arrowFlow = (Date.now() * 0.04 * (game.windSpeed / 12.0)) % 40;
+    // 1. Draw water wake if moving
+    if (boat.speed > 0.5) {
+      const stern = toScreen(0, 24);
+      const w1 = toScreen(-6, 32);
+      const w2 = toScreen(6, 32);
+      cga.line(stern.x, stern.y, w1.x, w1.y, 1);
+      cga.line(stern.x, stern.y, w2.x, w2.y, 1);
+    }
 
-    // Seta da Esquerda
-    ctx.beginPath();
-    ctx.moveTo(x + 8, centerY + 50);
-    ctx.lineTo(x + 8, centerY - 50);
-    ctx.stroke();
+    // 2. Boat Hull Outline (Red = 2)
+    const bow = toScreen(0, -26);
+    const portBow = toScreen(-9, -10);
+    const stbdBow = toScreen(9, -10);
+    const portMid = toScreen(-10, 8);
+    const stbdMid = toScreen(10, 8);
+    const portStern = toScreen(-7, 24);
+    const stbdStern = toScreen(7, 24);
 
-    // Seta da Direita
-    ctx.beginPath();
-    ctx.moveTo(x + w - 8, centerY + 50);
-    ctx.lineTo(x + w - 8, centerY - 50);
-    ctx.stroke();
+    cga.line(bow.x, bow.y, portBow.x, portBow.y, 2);
+    cga.line(portBow.x, portBow.y, portMid.x, portMid.y, 2);
+    cga.line(portMid.x, portMid.y, portStern.x, portStern.y, 2);
 
-    // Pontas das setas
-    ctx.beginPath();
-    if (isBlowingNorth) {
-      ctx.moveTo(x + 8, centerY - 58);
-      ctx.lineTo(x + 14, centerY - 48);
-      ctx.lineTo(x + 2, centerY - 48);
-      ctx.moveTo(x + w - 8, centerY - 58);
-      ctx.lineTo(x + w - 2, centerY - 48);
-      ctx.lineTo(x + w - 14, centerY - 48);
+    cga.line(bow.x, bow.y, stbdBow.x, stbdBow.y, 2);
+    cga.line(stbdBow.x, stbdBow.y, stbdMid.x, stbdMid.y, 2);
+    cga.line(stbdMid.x, stbdMid.y, stbdStern.x, stbdStern.y, 2);
+
+    cga.line(portStern.x, portStern.y, stbdStern.x, stbdStern.y, 2);
+
+    // Cockpit & deck details
+    const mast = toScreen(0, -6);
+    cga.fill(mast.x - 1, mast.y - 1, 3, 3, 3); // Mast (Brown)
+
+    // 3. Boom & Sail (Brown = 3 or Red = 2)
+    // Boom rotates around mast by boat.boomAngle
+    let boomRad = (relWindDeg + boat.boomAngle + 180) * (Math.PI / 180);
+    let boomLen = 22;
+
+    // If luffing (in-irons), vibrate boom and draw fluttering sail!
+    let luffOffset = 0;
+    if (boat.isLuffing) {
+      luffOffset = (Math.random() - 0.5) * 8;
+      boomRad += luffOffset * (Math.PI / 180);
+      if (window.v1Audio && window.v1Audio.luffFlutter) {
+        window.v1Audio.luffFlutter();
+      }
+    }
+
+    const boomEndX = Math.round(mast.x + Math.sin(boomRad) * boomLen);
+    const boomEndY = Math.round(mast.y - Math.cos(boomRad) * boomLen);
+
+    // Boom line (Brown = 3)
+    cga.line(mast.x, mast.y, boomEndX, boomEndY, 3);
+
+    // Sail shape / belly curve (drawn towards the wind or billowing)
+    const midX = Math.round((mast.x + boomEndX) / 2 + Math.sin(boomRad + 1.57) * (boat.isLuffing ? luffOffset : 4));
+    const midY = Math.round((mast.y + boomEndY) / 2 - Math.cos(boomRad + 1.57) * (boat.isLuffing ? luffOffset : 4));
+    cga.line(mast.x, mast.y, midX, midY, 3);
+    cga.line(midX, midY, boomEndX, boomEndY, 3);
+
+    // Status label at bottom of boat quadrant
+    if (boat.isLuffing) {
+      if (this.blinkOn) cga.textCenter("IN IRONS", x, w, y + h - 11, 2);
     } else {
-      ctx.moveTo(x + 8, centerY + 58);
-      ctx.lineTo(x + 14, centerY + 48);
-      ctx.lineTo(x + 2, centerY + 48);
-      ctx.moveTo(x + w - 8, centerY + 58);
-      ctx.lineTo(x + w - 2, centerY + 48);
-      ctx.lineTo(x + w - 14, centerY + 48);
+      cga.textCenter(boat.pointOfSail, x, w, y + h - 11, 3);
     }
-    ctx.closePath();
-    ctx.fill();
-
-    // Chevrons animados de vento fluindo ao longo das setas
-    ctx.strokeStyle = this.blinkState ? this.colors.brightRed : this.colors.red;
-    ctx.lineWidth = 2;
-    for (let offset = -40; offset <= 40; offset += 20) {
-      const cy = centerY + ((offset + (isBlowingNorth ? -arrowFlow : arrowFlow) + 80) % 80) - 40;
-      // Esquerda
-      ctx.beginPath();
-      ctx.moveTo(x + 4, cy + (isBlowingNorth ? 4 : -4));
-      ctx.lineTo(x + 8, cy);
-      ctx.lineTo(x + 12, cy + (isBlowingNorth ? 4 : -4));
-      ctx.stroke();
-      // Direita
-      ctx.beginPath();
-      ctx.moveTo(x + w - 12, cy + (isBlowingNorth ? 4 : -4));
-      ctx.lineTo(x + w - 8, cy);
-      ctx.lineTo(x + w - 4, cy + (isBlowingNorth ? 4 : -4));
-      ctx.stroke();
-    }
-
-    // B. Casco do Barco Visto de Cima (Amêndoa Vermelha sólida)
-    ctx.save();
-    ctx.translate(centerX, centerY);
-    const headingRad = (game.boat.heading - 90) * (Math.PI / 180);
-    ctx.rotate(headingRad);
-
-    // Casco vermelho em elipse alongada
-    ctx.fillStyle = this.colors.red;
-    ctx.beginPath();
-    ctx.ellipse(0, 0, 58, 22, 0, 0, Math.PI * 2);
-    ctx.fill();
-
-    // Gurupés na proa (linha verde)
-    ctx.strokeStyle = this.colors.brightGreen;
-    ctx.lineWidth = 3;
-    ctx.beginPath();
-    ctx.moveTo(58, 0);
-    ctx.lineTo(80, 0);
-    ctx.stroke();
-
-    // Leme na popa (linha verde articulada com o leme)
-    const rudderRad = game.boat.rudderAngle * 0.5 * (Math.PI / 180);
-    ctx.beginPath();
-    ctx.moveTo(-58, 0);
-    ctx.lineTo(-58 - Math.cos(rudderRad) * 24, Math.sin(rudderRad) * 24);
-    ctx.stroke();
-
-    // Mastro no centro e retranca/vela articulada
-    // Se em ferro (contra o vento), a vela trepida descontrolada
-    let sailAngle = game.boat.sailTrim;
-    if (game.boat.isLuffing) {
-      sailAngle += Math.sin(Date.now() * 0.04) * 8;
-    }
-    ctx.strokeStyle = this.colors.yellow;
-    ctx.lineWidth = 4;
-    const boomAngle = sailAngle * (Math.PI / 180);
-    ctx.beginPath();
-    ctx.moveTo(10, 0);
-    ctx.lineTo(10 - Math.cos(boomAngle) * 54, -Math.sin(boomAngle) * 54);
-    ctx.stroke();
-
-    ctx.restore();
-
-    // Feedback de estado de vento e trim sob o barco
-    ctx.textAlign = 'center';
-    if (game.boat.isLuffing) {
-      ctx.fillStyle = this.blinkState ? this.colors.brightRed : this.colors.yellow;
-      ctx.font = 'bold 11px monospace';
-      ctx.fillText("! EM FERRO (CONTRA O VENTO) !", centerX, centerY + 62);
-      ctx.font = '10px monospace';
-      ctx.fillText("VIRE O LEME P/ PEGAR VENTO", centerX, centerY + 74);
-    } else {
-      ctx.fillStyle = this.colors.brightGreen;
-      ctx.font = 'bold 11px monospace';
-      ctx.fillText(`VELOCIDADE: ${game.boat.speed.toFixed(1)} NÓS`, centerX, centerY + 62);
-      ctx.fillStyle = this.colors.yellow;
-      ctx.font = '10px monospace';
-      ctx.fillText(`VELA: ${Math.round(game.boat.sailTrim)}° (IDEAL: ${game.boat.optTrim || 42}°)`, centerX, centerY + 74);
-    }
-
-    // C. Barra Horizontal de Medição com Tiques na base do quadrante (Fotos 1, 4 e 5)
-    const barY = y + h - 16;
-    ctx.strokeStyle = this.colors.red;
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.moveTo(x + 10, barY);
-    ctx.lineTo(x + w - 10, barY);
-    ctx.stroke();
-
-    // Marcas de graduação (tiques)
-    const numTicks = 12;
-    const tickStep = (w - 20) / numTicks;
-    for (let i = 0; i <= numTicks; i++) {
-      ctx.beginPath();
-      ctx.moveTo(x + 10 + i * tickStep, barY - 4);
-      ctx.lineTo(x + 10 + i * tickStep, barY + 4);
-      ctx.stroke();
-    }
-
-    // Barra Vermelha de Intensidade do Vento (conforme Foto 1 e Foto 5)
-    const windRatio = Math.min(1.0, game.windSpeed / 25.0);
-    const windFillW = (w - 20) * windRatio;
-    ctx.fillStyle = this.colors.red;
-    ctx.fillRect(x + 10, barY - 6, windFillW, 4);
-
-    // Cursor Amarelo da Velocidade Real do Veleiro
-    const boatRatio = Math.min(1.0, game.boat.speed / game.boat.maxSpeed);
-    const curX = x + 10 + boatRatio * (w - 20);
-    ctx.fillStyle = this.colors.yellow;
-    ctx.fillRect(curX - 3, barY - 8, 6, 16);
-
-    ctx.restore();
   }
 
-  /**
-   * QUADRANTE INFERIOR DIREITO: Radar Estratégico Global e Status
-   */
-  renderStrategicRadar(ctx, x, y, w, h, game) {
-    ctx.save();
-    // Fundo preto
-    ctx.fillStyle = this.colors.black;
-    ctx.fillRect(x, y, w, h);
+  // ----------------------------------------------------- TILLER / RUDDER GAUGE
+  renderTillerGauge(cga, x, y, w, h, game) {
+    cga.fill(x, y, w, h, 0);
 
-    // Escala do radar (1600x1200 para ~220x110)
-    const rScaleX = (w - 24) / game.map.width;
-    const rScaleY = (h - 32) / game.map.height;
-    const radarOffsetX = x + 14;
-    const radarOffsetY = y + 8;
+    const midX = x + Math.floor(w / 2);
+    const midY = y + Math.floor(h / 2);
 
-    // A. Miniatura das Ilhas Verdes
-    ctx.fillStyle = this.colors.green;
-    for (const isl of (game.map?.islands || [])) {
-      const ix = radarOffsetX + isl.x * rScaleX;
-      const iy = radarOffsetY + isl.y * rScaleY;
-      const iw = Math.max(3, isl.w * rScaleX);
-      const ih = Math.max(3, isl.h * rScaleY);
-      ctx.fillRect(ix, iy, iw, ih);
+    // Tiller track (Brown = 3)
+    cga.line(x + 12, midY, x + w - 12, midY, 3);
+    // Center tick mark
+    cga.line(midX, midY - 3, midX, midY + 3, 3);
+    // Quarter ticks
+    cga.line(midX - 22, midY - 2, midX - 22, midY + 2, 3);
+    cga.line(midX + 22, midY - 2, midX + 22, midY + 2, 3);
+
+    // 'P' (Port) and 'S' (Starboard) labels
+    cga.text("P", x + 3, y + 3, 3);
+    cga.text("S", x + w - 9, y + 3, 3);
+
+    // Red indicator block for current rudder position
+    const offset = Math.round(game.boat.tillerDisplay * 38);
+    const rx = midX + offset - 2;
+    cga.fill(rx, midY - 4, 5, 9, 2);
+  }
+
+  // --------------------------------------------- RADAR & INSTRUMENTS QUADRANT
+  renderRadarAndInstruments(cga, x, y, w, h, game) {
+    cga.fill(x, y, w, h, 0);
+
+    // 1. Digital Clock & Lives
+    const totalSec = Math.floor(game.elapsedTime);
+    const mm = String(Math.floor(totalSec / 60)).padStart(2, '0');
+    const ss = String(totalSec % 60).padStart(2, '0');
+    cga.text(`${mm}:${ss}`, x + 4, y + 4, 3);
+
+    // Lives icons (red boat silhouettes)
+    for (let i = 0; i < Math.min(4, game.lives); i++) {
+      const lx = x + 62 + i * 11;
+      const ly = y + 5;
+      cga.pset(lx + 2, ly, 2);
+      cga.line(lx, ly + 2, lx + 4, ly + 2, 2);
+      cga.line(lx + 1, ly + 4, lx + 3, ly + 4, 2);
     }
 
-    // B. Náufragos como Pontos Laranjas (da Foto 1)
-    ctx.fillStyle = this.colors.yellow;
-    for (const s of (game.map?.swimmers || [])) {
-      if (!s.rescued) {
-        const sx = radarOffsetX + s.x * rScaleX;
-        const sy = radarOffsetY + s.y * rScaleY;
-        ctx.fillRect(sx, sy, 3, 3);
+    // 2. Hull Damage Gauge: D [=====] F
+    cga.text("D", x + 4, y + 15, 2);
+    cga.text("F", x + w - 12, y + 15, 1);
+    cga.rect(x + 15, y + 16, w - 30, 6, 3);
+
+    const dmgWidth = Math.round(((w - 32) * (100 - game.boat.damage)) / 100);
+    if (dmgWidth > 0) {
+      cga.fill(x + 16, y + 17, dmgWidth, 4, 2);
+    }
+
+    // 3. Mini Bermuda Triangle Radar Map (x: 204, y: 153, w: 104, h: 36)
+    const rx0 = x + 4;
+    const ry0 = y + 25;
+    const rw = w - 8;
+    const rh = 34;
+    cga.rect(rx0, ry0, rw, rh, 3);
+
+    // Scale world (1472 x 1104) down to (rw x rh)
+    const scaleX = (rw - 4) / game.map.width;
+    const scaleY = (rh - 4) / game.map.height;
+
+    // Draw mini green island dots/rects
+    for (const island of game.map.islands) {
+      const ix = Math.round(rx0 + 2 + island.x * scaleX);
+      const iy = Math.round(ry0 + 2 + island.y * scaleY);
+      const iw = Math.max(2, Math.round(island.w * scaleX));
+      const ih = Math.max(2, Math.round(island.h * scaleY));
+      cga.fill(ix, iy, iw, ih, 1);
+    }
+
+    // Current sector highlight box
+    const secX = Math.floor(game.boat.x / game.map.SECTOR_W);
+    const secY = Math.floor(game.boat.y / game.map.SECTOR_H);
+    const sx0 = Math.round(rx0 + 2 + (secX * game.map.SECTOR_W) * scaleX);
+    const sy0 = Math.round(ry0 + 2 + (secY * game.map.SECTOR_H) * scaleY);
+    const sw = Math.round(game.map.SECTOR_W * scaleX);
+    const sh = Math.round(game.map.SECTOR_H * scaleY);
+
+    if (this.blinkOn) {
+      cga.rect(sx0, sy0, Math.max(4, sw), Math.max(4, sh), 2);
+    }
+
+    // Flashing boat pixel
+    const bx = Math.round(rx0 + 2 + game.boat.x * scaleX);
+    const by = Math.round(ry0 + 2 + game.boat.y * scaleY);
+    cga.pset(bx, by, this.blinkOn ? 3 : 2);
+  }
+
+  // ----------------------------------------------------------- SECTOR MAP VIEW
+  renderMainMapView(cga, x, y, w, h, game) {
+    cga.fill(x, y, w, h, 0);
+    cga.setClip(x, y, w, h);
+
+    const boat = game.boat;
+    const map = game.map;
+
+    // Current Sector Coordinates
+    const secX = Math.floor(boat.x / map.SECTOR_W);
+    const secY = Math.floor(boat.y / map.SECTOR_H);
+
+    // Sector World Origin
+    const secWorldX = secX * map.SECTOR_W;
+    const secWorldY = secY * map.SECTOR_H;
+
+    // Transform world coords to screen coords in left quadrant
+    const toScreen = (wx, wy) => ({
+      x: Math.round(x + (wx - secWorldX)),
+      y: Math.round(y + (wy - secWorldY))
+    });
+
+    // 1. Draw Islands & Coastlines in this sector (CGA Green = 1)
+    // Drawn with 4px stepped CGA blocks for true 1983 pixel fidelity
+    for (const island of map.islands) {
+      // Check if island intersects this sector
+      if (island.x + island.w >= secWorldX && island.x <= secWorldX + map.SECTOR_W &&
+          island.y + island.h >= secWorldY && island.y <= secWorldY + map.SECTOR_H) {
+
+        const p0 = toScreen(island.x, island.y);
+        const p1 = toScreen(island.x + island.w, island.y + island.h);
+
+        // Fill with stepped 4px blocks
+        const bx0 = Math.floor(p0.x / 4) * 4;
+        const by0 = Math.floor(p0.y / 4) * 4;
+        const bx1 = Math.ceil(p1.x / 4) * 4;
+        const by1 = Math.ceil(p1.y / 4) * 4;
+
+        cga.fill(bx0, by0, bx1 - bx0, by1 - by0, 1);
       }
     }
 
-    // C. Ponto Piscante do Jogador
-    if (this.blinkState) {
-      ctx.fillStyle = this.colors.white;
-      const bx = radarOffsetX + game.boat.x * rScaleX;
-      const by = radarOffsetY + game.boat.y * rScaleY;
-      ctx.fillRect(bx - 2, by - 2, 5, 5);
+    // 2. Draw Coral Reefs in this sector (Brown = 3)
+    for (const reef of map.reefs) {
+      const p = toScreen(reef.x, reef.y);
+      if (p.x >= x - 20 && p.x <= x + w + 20 && p.y >= y - 20 && p.y <= y + h + 20) {
+        cga.circle(p.x, p.y, Math.round(reef.r / 3), 3);
+        cga.pset(p.x, p.y, 3);
+        cga.pset(p.x - 3, p.y - 2, 3);
+        cga.pset(p.x + 3, p.y + 2, 3);
+      }
     }
 
-    // D. Medidor Vertical Esquerdo 'D' a 'F' (Dano / Combustível)
-    ctx.strokeStyle = this.colors.red;
-    ctx.fillStyle = this.colors.red;
-    ctx.font = 'bold 11px monospace';
-    ctx.fillText("D", x + 3, y + 16);
-    ctx.fillText("F", x + 3, y + h - 22);
-
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.moveTo(x + 8, y + 20);
-    ctx.lineTo(x + 8, y + h - 26);
-    ctx.stroke();
-
-    // Nível do dano
-    const dmgPct = (100 - game.boat.damage) / 100;
-    const dmgH = (h - 46) * dmgPct;
-    ctx.fillStyle = this.colors.brightGreen;
-    ctx.fillRect(x + 6, y + h - 26 - dmgH, 5, dmgH);
-
-    // E. Rodapé com Relógio Digital, Vidas e Pontuação (Exatamente como na Foto 1)
-    const footerY = y + h - 8;
-    ctx.font = 'bold 14px monospace';
-    ctx.fillStyle = this.colors.red;
-
-    // Relógio 00:11
-    const secs = Math.floor(game.elapsedTime);
-    const minsStr = String(Math.floor(secs / 60)).padStart(2, '0');
-    const secsStr = String(secs % 60).padStart(2, '0');
-    ctx.fillText(`${minsStr}:${secsStr}`, x + 6, footerY);
-
-    // Ícones de Vidas (Barquinhos Vermelhos)
-    for (let i = 0; i < Math.min(5, game.lives); i++) {
-      const lx = x + 85 + i * 16;
-      ctx.beginPath();
-      ctx.moveTo(lx, footerY - 10);
-      ctx.lineTo(lx + 8, footerY - 2);
-      ctx.lineTo(lx - 4, footerY - 2);
-      ctx.closePath();
-      ctx.fill();
+    // 3. Draw Destination Port in this sector
+    const port = map.ports[game.leg];
+    if (port && port.targetSecX === secX && port.targetSecY === secY) {
+      const pp = toScreen(port.x, port.y);
+      // Flashing port buoy
+      cga.circle(pp.x, pp.y, 6, this.blinkOn ? 1 : 3);
+      cga.line(pp.x, pp.y - 8, pp.x, pp.y + 8, 3);
+      cga.line(pp.x - 8, pp.y, pp.x + 8, pp.y, 3);
+      cga.text("PORT", pp.x - 14, pp.y - 16, 1);
     }
 
-    // Pontuação 00000
-    const scoreStr = String(game.score).padStart(5, '0');
-    ctx.fillText(scoreStr, x + w - 50, footerY);
+    // 4. Draw Swimmers (Castaways) as brown rings
+    for (const s of map.swimmers) {
+      if (s.rescued) continue;
+      const sp = toScreen(s.x, s.y);
+      if (sp.x >= x && sp.x <= x + w && sp.y >= y && sp.y <= y + h) {
+        cga.circle(sp.x, sp.y, 3, 3);
+        cga.pset(sp.x, sp.y, this.blinkOn ? 2 : 3);
+      }
+    }
 
-    ctx.restore();
+    // 5. Draw Dynamic Hazards (Sharks, Powerboats, Whirlwinds, Anomalies)
+    for (const haz of map.hazards) {
+      const hp = toScreen(haz.x, haz.y);
+      if (hp.x < x - 20 || hp.x > x + w + 20 || hp.y < y - 20 || hp.y > y + h + 20) continue;
+
+      if (haz.type === 'shark') {
+        // Red shark fin
+        cga.line(hp.x, hp.y - 3, hp.x + 4, hp.y + 2, 2);
+        cga.line(hp.x + 4, hp.y + 2, hp.x - 3, hp.y + 2, 2);
+        cga.line(hp.x - 3, hp.y + 2, hp.x, hp.y - 3, 2);
+      } else if (haz.type === 'speedboat') {
+        // Fast red craft with dashed wake
+        cga.rect(hp.x - 4, hp.y - 2, 8, 4, 2);
+        cga.pset(hp.x - 6, hp.y, 3);
+        cga.pset(hp.x - 8, hp.y, 3);
+      } else if (haz.type === 'whirlwind') {
+        // Swirling vortex
+        cga.circle(hp.x, hp.y, 8, 1);
+        cga.circle(hp.x, hp.y, 4, 2);
+      } else if (haz.type === 'anomaly') {
+        // Pulsing alien diamond
+        cga.line(hp.x, hp.y - 6, hp.x + 6, hp.y, 2);
+        cga.line(hp.x + 6, hp.y, hp.x, hp.y + 6, 2);
+        cga.line(hp.x, hp.y + 6, hp.x - 6, hp.y, 2);
+        cga.line(hp.x - 6, hp.y, hp.x, hp.y - 6, 2);
+        cga.pset(hp.x, hp.y, 3);
+      }
+    }
+
+    // 6. Draw Boat Wake Trail on Map
+    for (const wk of boat.wake) {
+      const wp = toScreen(wk.x, wk.y);
+      if (wp.x >= x && wp.x <= x + w && wp.y >= y && wp.y <= y + h) {
+        cga.pset(wp.x, wp.y, 1);
+      }
+    }
+
+    // 7. Draw Player's Boat Sprite (Red = 2 with Brown = 3 mast)
+    const bp = toScreen(boat.x, boat.y);
+    const bRad = boat.heading * (Math.PI / 180);
+    const cosB = Math.cos(bRad);
+    const sinB = Math.sin(bRad);
+
+    const bTip = { x: Math.round(bp.x + sinB * 7), y: Math.round(bp.y - cosB * 7) };
+    const bLeft = { x: Math.round(bp.x - sinB * 5 - cosB * 4), y: Math.round(bp.y + cosB * 5 - sinB * 4) };
+    const bRight = { x: Math.round(bp.x - sinB * 5 + cosB * 4), y: Math.round(bp.y + cosB * 5 + sinB * 4) };
+
+    cga.line(bTip.x, bTip.y, bLeft.x, bLeft.y, 2);
+    cga.line(bTip.x, bTip.y, bRight.x, bRight.y, 2);
+    cga.line(bLeft.x, bLeft.y, bRight.x, bRight.y, 2);
+
+    // Fill inner hull
+    const midX = Math.round((bTip.x + bLeft.x + bRight.x) / 3);
+    const midY = Math.round((bTip.y + bLeft.y + bRight.y) / 3);
+    cga.line(bTip.x, bTip.y, midX, midY, 2);
+    cga.line(bLeft.x, bLeft.y, midX, midY, 2);
+    cga.line(bRight.x, bRight.y, midX, midY, 2);
+
+    // Prominent mast dot (Brown = 3)
+    cga.fill(bp.x - 1, bp.y - 1, 3, 3, 3);
+
+    // 8. Radio narrative overlay banner
+    if (game.radioMessage && game.radioTimer > 0) {
+      cga.fill(x + 2, y + h - 18, w - 4, 16, 0);
+      cga.rect(x + 2, y + h - 18, w - 4, 16, 3);
+      cga.text(game.radioMessage.substring(0, 22), x + 6, y + h - 14, 3);
+    }
+
+    // Sector coordinates stamp in corner
+    cga.text(`SEC ${secX},${secY}`, x + 4, y + 4, 3);
+
+    cga.resetClip();
   }
 
-  /**
-   * TELA DE TÍTULO ORIGINAL (Foto 5)
-   */
-  /**
-   * Cálculo dos retângulos dos itens de menu da tela de título
-   */
-  getTitleMenuItems(x, y, w, h) {
-    const startY = y + 112;
-    const itemH = 18;
-    const gap = 6;
-    const items = [
-      { key: 'B', text: '(B) to begin game', y: startY },
-      { key: 'P', text: '(P) for practice leg', y: startY + itemH },
-      { key: 'X', text: '(X) exit to system', y: startY + itemH * 2 },
-      { key: 'A', text: '(A)ll instructions', y: startY + itemH * 3 + gap },
-      { key: 'O', text: '(O)bject of the game', y: startY + itemH * 4 + gap },
-      { key: 'C', text: '(C)ontrols', y: startY + itemH * 5 + gap },
-      { key: 'S', text: '(S)coring', y: startY + itemH * 6 + gap },
-      { key: 'H', text: '(H)azards', y: startY + itemH * 7 + gap },
-      { key: 'G', text: '(G)auges', y: startY + itemH * 8 + gap }
+  // ------------------------------------------------------------- TELEMETRY HUD
+  renderTelemetryHUD(cga, x, y, game) {
+    const boat = game.boat;
+    cga.fill(x, y, 168, 56, 0);
+    cga.rect(x, y, 168, 56, 3);
+
+    const hdgStr = String(Math.round(boat.heading)).padStart(3, '0');
+    const wndStr = String(Math.round(game.windDir)).padStart(3, '0');
+    const awaStr = (boat.apparentWindAngle >= 0 ? '+' : '') + Math.round(boat.apparentWindAngle);
+
+    cga.text(`HDG: ${hdgStr}°  SPD: ${boat.speed.toFixed(1)}KT`, x + 4, y + 4, 3);
+    cga.text(`WND: ${wndStr}° @ ${game.windSpeed}KT`, x + 4, y + 14, 3);
+    cga.text(`AWA: ${awaStr}° [${boat.pointOfSail}]`, x + 4, y + 24, boat.isLuffing ? 2 : 1);
+    cga.text(`SHT: ${Math.round(boat.sheetAngle)}° OPT: ${boat.optimalSheet}°`, x + 4, y + 34, 3);
+    cga.text(`STATUS: ${boat.isLuffing ? "IN IRONS!" : "UNDER WAY"}`, x + 4, y + 44, boat.isLuffing ? 2 : 1);
+  }
+
+  // ------------------------------------------------------------- TITLE SCREEN
+  renderTitleScreen(cga, x, y, w, h, game) {
+    cga.fill(x, y, w, h, 0);
+
+    cga.textCenter("SAILING...", x, w, y + 8, 3);
+    cga.textCenter("AN ADVENTURE IN THE", x, w, y + 20, 3);
+    cga.textCenter("BERMUDA TRIANGLE", x, w, y + 30, 2);
+
+    cga.line(x + 10, y + 42, x + w - 10, y + 42, 3);
+
+    const opts = [
+      { key: 'B', label: "[B] - BEGIN GAME" },
+      { key: 'P', label: "[P] - PRACTICE SAILING" },
+      { key: 'O', label: "[O] - OBJECTIVE" },
+      { key: 'C', label: "[C] - CONTROLS" },
+      { key: 'S', label: "[S] - SAILING BASICS" },
+      { key: 'H', label: "[H] - HAZARDS" },
+      { key: 'G', label: "[G] - GEOGRAPHY" },
+      { key: 'A', label: "[A] - ALL INSTRUCTIONS" },
+      { key: 'T', label: "[T] - TELEMETRY HUD" }
     ];
 
-    return items.map(it => ({
-      ...it,
-      x: x + 20,
-      w: w - 40,
-      h: itemH
-    }));
+    for (let i = 0; i < opts.length; i++) {
+      const opt = opts[i];
+      const isHovered = this.hoveredMenuOption === opt.key;
+      const c = isHovered ? 1 : 3;
+      cga.text(opt.label, x + 12, y + 48 + i * 11, c);
+    }
+
+    cga.line(x + 10, y + 150, x + w - 10, y + 150, 3);
+    cga.textCenter("DYNETRON COMPANY (C) 1983", x, w, y + 156, 3);
+    cga.textCenter("PRESS KEY OR CLICK OPTION", x, w, y + 168, this.blinkOn ? 1 : 3);
   }
 
-  /**
-   * Identifica se as coordenadas do mouse (x, y) estão sobre uma opção do menu
-   */
-  getMenuOptionAt(x, y) {
-    const q1X = 14;
-    const q1Y = 14;
-    const q1W = 380;
-    const q1H = 372;
-    const items = this.getTitleMenuItems(q1X, q1Y, q1W, q1H);
+  getMenuOptionAt(cx, cy) {
+    // Relative to left quadrant (x: 8 to 192, y: 8 to 192)
+    if (cx < 8 || cx > 192 || cy < 56 || cy > 156) return null;
+    const row = Math.floor((cy - 56) / 11);
+    const keys = ['B', 'P', 'O', 'C', 'S', 'H', 'G', 'A', 'T'];
+    return keys[row] || null;
+  }
 
-    for (const it of items) {
-      if (x >= it.x && x <= it.x + it.w && y >= it.y && y <= it.y + it.h) {
-        return it.key;
+  // ------------------------------------------------------- INSTRUCTION SCREENS
+  renderInstructions(cga, x, y, w, h, game) {
+    cga.fill(x, y, w, h, 0);
+
+    const key = game.currentInstruction || 'O';
+    const pages = {
+      'O': {
+        title: "OBJECTIVE",
+        lines: [
+          "YOU ARE CAPTAIN OF A 36-FT",
+          "SLOOP IN THE DANGEROUS",
+          "BERMUDA TRIANGLE.",
+          "",
+          "NAVIGATE 3 LEGS ACROSS",
+          "THE MYSTERIOUS CARIBBEAN:",
+          " 1. MIAMI TO BERMUDA",
+          " 2. BERMUDA TO SAN JUAN",
+          " 3. SAN JUAN TO MIAMI",
+          "",
+          "RESCUE CASTAWAYS FOR",
+          "500 PTS EACH AND REACH",
+          "DESTINATION HARBOURS."
+        ]
+      },
+      'C': {
+        title: "CONTROLS",
+        lines: [
+          "STEERING (RUDDER):",
+          " [LEFT / A]  - PORT (LEFT)",
+          " [RIGHT / D] - STBD (RIGHT)",
+          "",
+          "SAIL TRIM (SHEET):",
+          " [UP / W]   - SHEET IN (TIGHT)",
+          " [DOWN / S] - SHEET OUT (EASE)",
+          "",
+          "OTHER COMMANDS:",
+          " [T] - TOGGLE TELEMETRY HUD",
+          " [M] - MUTE AUDIO",
+          " [B] - BEGIN GAME NOW"
+        ]
+      },
+      'S': {
+        title: "SAILING BASICS",
+        lines: [
+          "A BOAT CANNOT SAIL DIRECTLY",
+          "INTO THE WIND (IN-IRONS).",
+          "",
+          "TO GO UPWIND:",
+          "TACK IN A ZIG-ZAG AT 45 DEG",
+          "TO THE WIND WITH SHEET TIGHT.",
+          "",
+          "OFF THE WIND:",
+          "EASE THE SHEET AS YOU TURN",
+          "AWAY FROM THE WIND.",
+          "",
+          "BEAM REACH (90 DEG) IS YOUR",
+          "FASTEST POINT OF SAIL!"
+        ]
+      },
+      'H': {
+        title: "HAZARDS",
+        lines: [
+          "WATCH OUT FOR:",
+          "",
+          "- CORAL REEFS (BROWN)",
+          "- SHARKS AND RUNAWAYS",
+          "- ROGUE SPEEDBOATS",
+          "- DERELICT SHIPS",
+          "- FREAK WHIRLWINDS",
+          "- MAGNETIC ANOMALIES",
+          "",
+          "COLLISIONS DAMAGE HULL (D).",
+          "AVOID RUNNING AGROUND!"
+        ]
+      },
+      'G': {
+        title: "GEOGRAPHY",
+        lines: [
+          "THE BERMUDA TRIANGLE:",
+          "",
+          "WEST: FLORIDA & KEYS",
+          "CENTRE: BAHAMA ISLANDS",
+          "NORTHEAST: BERMUDA",
+          "SOUTH: CUBA",
+          "SOUTHEAST: PUERTO RICO",
+          "",
+          "USE THE RADAR IN LOWER RIGHT",
+          "TO TRACK YOUR SECTOR."
+        ]
       }
-    }
-    return null;
-  }
+    };
 
-  /**
-   * TELA DE TÍTULO ORIGINAL (Foto 5) - Com interatividade de clique e hover
-   */
-  renderTitleScreen(ctx, x, y, w, h) {
-    ctx.fillStyle = this.colors.black;
-    ctx.fillRect(x, y, w, h);
+    const cur = pages[key] || pages['O'];
 
-    // Título Principal SAILING
-    ctx.fillStyle = this.colors.yellow;
-    ctx.font = 'bold 20px monospace';
-    ctx.textAlign = 'center';
-    ctx.fillText("SAILING", x + w / 2, y + 30);
+    cga.textCenter(`* ${cur.title} *`, x, w, y + 8, 2);
+    cga.line(x + 10, y + 20, x + w - 10, y + 20, 3);
 
-    ctx.font = '12px monospace';
-    ctx.fillStyle = this.colors.white;
-    ctx.fillText("Before playing, you may wish to review", x + w / 2, y + 54);
-    ctx.fillText("some or all of the instruction screens.", x + w / 2, y + 70);
-
-    ctx.fillStyle = this.colors.brightGreen;
-    ctx.fillText("Select option below or click on it:", x + w / 2, y + 88);
-
-    // Lista de Itens do Menu
-    const items = this.getTitleMenuItems(x, y, w, h);
-    ctx.textAlign = 'left';
-    ctx.font = 'bold 13px monospace';
-
-    for (const it of items) {
-      const isHovered = this.hoveredMenuOption === it.key;
-
-      if (isHovered) {
-        // Destaque visual retrô ao passar o mouse
-        ctx.fillStyle = '#b85c00'; // Fundo laranja CGA
-        ctx.fillRect(it.x - 4, it.y, it.w + 8, it.h);
-        ctx.strokeStyle = this.colors.yellow;
-        ctx.lineWidth = 1;
-        ctx.strokeRect(it.x - 4, it.y, it.w + 8, it.h);
-
-        ctx.fillStyle = this.colors.white;
-        ctx.fillText(`► ${it.text}`, it.x + 4, it.y + 14);
-      } else {
-        ctx.fillStyle = this.colors.yellow;
-        ctx.fillText(`  ${it.text}`, it.x + 4, it.y + 14);
-      }
+    for (let i = 0; i < cur.lines.length; i++) {
+      cga.text(cur.lines[i], x + 8, y + 26 + i * 10, 3);
     }
 
-    // Rodapé piscante orientando o jogador
-    ctx.textAlign = 'center';
-    ctx.fillStyle = this.blinkState ? this.colors.yellow : this.colors.white;
-    ctx.font = 'bold 12px monospace';
-    ctx.fillText("[ CLIQUE COM O MOUSE OU DIGITE A LETRA ]", x + w / 2, y + h - 28);
-    ctx.font = '11px monospace';
-    ctx.fillText("TYPE OPTION (B, P, O, C, S, H, G)", x + w / 2, y + h - 14);
+    cga.line(x + 10, y + 162, x + w - 10, y + 162, 3);
+    cga.textCenter("[SPACE / CLICK TO RETURN]", x, w, y + 168, this.blinkOn ? 1 : 3);
   }
 
-  /**
-   * TELAS DE INSTRUÇÃO E STORYTELLING (Fotos 3 e 5)
-   */
-  renderInstructionScreen(ctx, x, y, w, h, game) {
-    ctx.fillStyle = this.colors.black;
-    ctx.fillRect(x, y, w, h);
+  // ------------------------------------------------------------- GENERIC MODAL
+  renderModal(cga, x, y, w, h, lines, borderCol = 3) {
+    const mw = w - 16;
+    const mh = lines.length * 12 + 16;
+    const mx = x + 8;
+    const my = y + Math.floor((h - mh) / 2);
 
-    ctx.fillStyle = this.colors.yellow;
-    ctx.font = 'bold 16px monospace';
-    ctx.textAlign = 'center';
+    cga.fill(mx, my, mw, mh, 0);
+    cga.rect(mx, my, mw, mh, borderCol);
 
-    const t = game.currentInstruction;
-    if (t === 'O') {
-      // *MAIN OBJECTIVE* (Foto 3)
-      ctx.fillText("*MAIN OBJECTIVE*", x + w / 2, y + 36);
-      ctx.font = '12px monospace';
-      ctx.textAlign = 'left';
-      const textX = x + 25;
-      let ty = y + 70;
-      const lh = 18;
-
-      ctx.fillText("Sail 3 legs of the Bermuda Triangle", textX, ty); ty += lh;
-      ctx.fillText("picking up all swimmers and rafters", textX, ty); ty += lh;
-      ctx.fillText("stranded in the water. Then stop the", textX, ty); ty += lh;
-      ctx.fillText("clock and collect bonus by sailing", textX, ty); ty += lh;
-      ctx.fillText("into port at the end of the leg.", textX, ty); ty += lh * 2;
-
-      ctx.fillStyle = this.colors.brightGreen;
-      ctx.fillText("ETAPA 1: Flórida ➔ Bermudas", textX, ty); ty += lh;
-      ctx.fillText("ETAPA 2: Bermudas ➔ Porto Rico", textX, ty); ty += lh;
-      ctx.fillText("ETAPA 3: Porto Rico ➔ Miami", textX, ty);
-    } else if (t === 'H') {
-      // HAZARDS & O SOBRENATURAL
-      ctx.fillText("*HAZARDS OF THE TRIANGLE*", x + w / 2, y + 36);
-      ctx.font = '12px monospace';
-      ctx.textAlign = 'left';
-      const textX = x + 25;
-      let ty = y + 68;
-      const lh = 17;
-
-      ctx.fillStyle = this.colors.red;
-      ctx.fillText("• TUBARÕES E LANCHAS:", textX, ty); ty += lh;
-      ctx.fillStyle = this.colors.yellow;
-      ctx.fillText("  Causam danos severos no casco.", textX, ty); ty += lh + 4;
-
-      ctx.fillStyle = this.colors.brightGreen;
-      ctx.fillText("• NÉVOA RASTEJANTE (MIST):", textX, ty); ty += lh;
-      ctx.fillStyle = this.colors.yellow;
-      ctx.fillText("  Bloqueia a visibilidade do radar.", textX, ty); ty += lh + 4;
-
-      ctx.fillStyle = this.colors.white;
-      ctx.fillText("• REDEMOINHOS (WHIRLWINDS):", textX, ty); ty += lh;
-      ctx.fillStyle = this.colors.yellow;
-      ctx.fillText("  Vórtices magnéticos que teletransportam!", textX, ty); ty += lh + 4;
-
-      ctx.fillStyle = this.colors.brightRed;
-      ctx.fillText("• ENTIDADES CRISTALINAS (ALIENS):", textX, ty); ty += lh;
-      ctx.fillStyle = this.colors.yellow;
-      ctx.fillText("  Campos de energia do Triângulo.", textX, ty);
-    } else if (t === 'C') {
-      // CONTROLS
-      ctx.fillText("*CONTROLS*", x + w / 2, y + 36);
-      ctx.font = '12px monospace';
-      ctx.textAlign = 'left';
-      const textX = x + 25;
-      let ty = y + 75;
-      const lh = 22;
-
-      ctx.fillText("SETA ESQ / DIR (A/D): Leme (virar proa)", textX, ty); ty += lh;
-      ctx.fillText("SETA CIMA / BAIXO (W/S): Caçar / Filar vela", textX, ty); ty += lh;
-      ctx.fillText("ESPAÇO / CLIQUE: Continuar / Iniciar", textX, ty); ty += lh;
-      ctx.fillText("M: Ligar / Desligar Som do PC", textX, ty); ty += lh;
-      ctx.fillText("ESC: Voltar ao Menu Principal", textX, ty);
-    } else {
-      // SCORING OU GAUGES
-      ctx.fillText("*INSTRUMENT GAUGES & SCORE*", x + w / 2, y + 36);
-      ctx.font = '12px monospace';
-      ctx.textAlign = 'left';
-      const textX = x + 25;
-      let ty = y + 75;
-      const lh = 20;
-
-      ctx.fillText("QUADRANTE TOP-DIR: Close da vela e vento", textX, ty); ty += lh;
-      ctx.fillText("QUADRANTE INF-DIR: Radar tático e náufragos", textX, ty); ty += lh;
-      ctx.fillText("INDICADOR 'D' - 'F': Integridade do casco", textX, ty); ty += lh;
-      ctx.fillText("RESGATE: 500 PONTOS POR SOBREVIVENTE", textX, ty); ty += lh;
-      ctx.fillText("PORTO: BÔNUS POR TEMPO RESTANTE", textX, ty);
-    }
-
-    ctx.fillStyle = this.blinkState ? this.colors.yellow : this.colors.white;
-    ctx.textAlign = 'center';
-    ctx.font = 'bold 12px monospace';
-    ctx.fillText("[ CLIQUE NA TELA OU ESPAÇO PARA VOLTAR ]", x + w / 2, y + h - 25);
-    ctx.font = '11px monospace';
-    ctx.fillText("Hit SPACE or CLICK to return", x + w / 2, y + h - 10);
-  }
-
-  /**
-   * MODAL: LEG X <CR> TO BEGIN (Foto 2) - Bilingue e interativo com clique direto
-   */
-  renderLegIntroModal(ctx, x, y, w, h, game) {
-    const mw = 270;
-    const mh = 110;
-    const mx = x + (w - mw) / 2;
-    const my = y + (h - mh) / 2 - 30;
-
-    ctx.fillStyle = this.colors.black;
-    ctx.fillRect(mx, my, mw, mh);
-    ctx.strokeStyle = this.colors.orange;
-    ctx.lineWidth = 3;
-    ctx.strokeRect(mx, my, mw, mh);
-    ctx.strokeRect(mx + 4, my + 4, mw - 8, mh - 8);
-
-    ctx.fillStyle = this.colors.yellow;
-    ctx.font = 'bold 18px monospace';
-    ctx.textAlign = 'center';
-    ctx.fillText(`ETAPA  ${game.leg} : LEG  ${game.leg}`, mx + mw / 2, my + 30);
-
-    ctx.font = '12px monospace';
-    ctx.fillStyle = this.colors.brightGreen;
-    const dest = game.leg === 1 ? "MIAMI ➔ BERMUDAS" : game.leg === 2 ? "BERMUDAS ➔ PORTO RICO" : "PORTO RICO ➔ MIAMI";
-    ctx.fillText(dest, mx + mw / 2, my + 50);
-
-    ctx.font = 'bold 14px monospace';
-    ctx.fillStyle = this.blinkState ? this.colors.yellow : this.colors.white;
-    ctx.fillText("<CR> / [ CLIQUE AQUI ]", mx + mw / 2, my + 74);
-    ctx.font = '11px monospace';
-    ctx.fillText("PRESSIONE ENTER OU CLIQUE P/ INICIAR", mx + mw / 2, my + 94);
-  }
-
-  /**
-   * MODAL: ETAPA CONCLUÍDA
-   */
-  renderLegCompleteModal(ctx, x, y, w, h, game) {
-    const mw = 260;
-    const mh = 120;
-    const mx = x + (w - mw) / 2;
-    const my = y + (h - mh) / 2 - 40;
-
-    ctx.fillStyle = this.colors.black;
-    ctx.fillRect(mx, my, mw, mh);
-    ctx.strokeStyle = this.colors.brightGreen;
-    ctx.lineWidth = 3;
-    ctx.strokeRect(mx, my, mw, mh);
-
-    ctx.fillStyle = this.colors.brightGreen;
-    ctx.font = 'bold 16px monospace';
-    ctx.textAlign = 'center';
-    ctx.fillText(`ETAPA ${game.leg} CONCLUÍDA!`, mx + mw / 2, my + 35);
-
-    ctx.fillStyle = this.colors.yellow;
-    ctx.font = '13px monospace';
-    ctx.fillText("TODOS OS NÁUFRAGOS A SALVO", mx + mw / 2, my + 65);
-
-    ctx.fillStyle = this.blinkState ? this.colors.white : this.colors.yellow;
-    ctx.fillText("PRESSIONE ESPAÇO P/ PROSSEGUIR", mx + mw / 2, my + 95);
-  }
-
-  /**
-   * TELA DE VITÓRIA FINAL (APÓS COMPLETAR AS 3 ETAPAS)
-   */
-  renderVictoryScreen(ctx, x, y, w, h, game) {
-    ctx.fillStyle = this.colors.black;
-    ctx.fillRect(x, y, w, h);
-
-    ctx.fillStyle = this.colors.brightGreen;
-    ctx.font = 'bold 18px monospace';
-    ctx.textAlign = 'center';
-    ctx.fillText("★ VITÓRIA NO TRIÂNGULO DAS BERMUDAS ★", x + w / 2, y + 40);
-
-    ctx.fillStyle = this.colors.yellow;
-    ctx.font = '13px monospace';
-    ctx.textAlign = 'left';
-    const textX = x + 25;
-    let ty = y + 80;
-    const lh = 20;
-
-    ctx.fillText("Você cruzou os três vértices sagrados:", textX, ty); ty += lh;
-    ctx.fillText("Flórida, Bermudas e Porto Rico!", textX, ty); ty += lh * 1.5;
-
-    ctx.fillStyle = this.colors.white;
-    ctx.fillText("Sobreviventes do Voo 19 e de várias eras", textX, ty); ty += lh;
-    ctx.fillText("foram resgatados do bolsão dimensional.", textX, ty); ty += lh * 1.5;
-
-    ctx.fillStyle = this.colors.brightGreen;
-    ctx.fillText(`PONTUAÇÃO FINAL: ${game.score} PONTOS`, textX, ty); ty += lh * 2;
-
-    ctx.textAlign = 'center';
-    ctx.fillStyle = this.blinkState ? this.colors.yellow : this.colors.white;
-    ctx.fillText("PRESSIONE ESPAÇO PARA O MENU", x + w / 2, y + h - 25);
-  }
-
-  renderGameOverScreen(ctx, x, y, w, h, game) {
-    ctx.fillStyle = this.colors.black;
-    ctx.fillRect(x, y, w, h);
-
-    ctx.fillStyle = this.colors.red;
-    ctx.font = 'bold 20px monospace';
-    ctx.textAlign = 'center';
-    ctx.fillText("EMBARCAÇÃO PERDIDA NO MAR", x + w / 2, y + 90);
-
-    ctx.fillStyle = this.colors.yellow;
-    ctx.font = '14px monospace';
-    ctx.fillText("O Triângulo das Bermudas cobrou seu preço.", x + w / 2, y + 140);
-    ctx.fillText(`PONTOS ALCANÇADOS: ${game.score}`, x + w / 2, y + 180);
-
-    ctx.fillStyle = this.blinkState ? this.colors.white : this.colors.yellow;
-    ctx.fillText("PRESSIONE ESPAÇO PARA REINICIAR", x + w / 2, y + 250);
-  }
-
-  /**
-   * Desenha costa com blocos pixelados (degrade em degraus da Foto 1)
-   */
-  drawBlockyCoastline(ctx, x, y, w, h) {
-    const step = 16;
-    for (let bx = 0; bx < w; bx += step) {
-      for (let by = 0; by < h; by += step) {
-        ctx.fillRect(x + bx, y + by, step, step);
-      }
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i];
+      const col = (line.startsWith('*') || line.startsWith('[')) ? borderCol : 3;
+      cga.textCenter(line, mx, mw, my + 8 + i * 12, col);
     }
   }
 
-  /**
-   * Barquinho do jogador no mapa principal (ícone vermelho e vela triangular)
-   */
-  drawPlayerMapBoat(ctx, cx, cy, boat) {
-    ctx.save();
-    ctx.translate(cx, cy);
-    const rad = (boat.heading - 90) * (Math.PI / 180);
-    ctx.rotate(rad);
-
-    // Casco vermelho do barquinho
-    ctx.fillStyle = this.colors.red;
-    ctx.beginPath();
-    ctx.moveTo(14, 0);
-    ctx.lineTo(-10, -7);
-    ctx.lineTo(-10, 7);
-    ctx.closePath();
-    ctx.fill();
-
-    // Vela triangular amarela/verde
-    ctx.fillStyle = this.colors.brightGreen;
-    ctx.beginPath();
-    ctx.moveTo(4, 0);
-    ctx.lineTo(-8, -12);
-    ctx.lineTo(-4, 0);
-    ctx.closePath();
-    ctx.fill();
-
-    ctx.restore();
-  }
-
-  /**
-   * Padrão de perigo ornamental no rodapé do mapa (exatamente como na Foto 1)
-   */
-  drawHazardBorderPattern(ctx, x, y, w) {
-    ctx.fillStyle = this.colors.orange;
-    const patW = 28;
-    const num = Math.ceil(w / patW);
-    for (let i = 0; i < num; i++) {
-      const px = x + i * patW;
-      ctx.fillRect(px + 4, y + 6, 8, 8);
-      ctx.fillRect(px + 16, y + 6, 8, 8);
-      ctx.fillRect(px + 10, y + 2, 8, 16);
-    }
+  // ------------------------------------------------------------- BOTTOM STATUS
+  renderBottomStatus(cga, game) {
+    const scoreStr = String(game.score).padStart(6, '0');
+    cga.text(`SCORE: ${scoreStr}`, 8, 192, 3);
+    cga.text(`LEG: ${game.leg}/3`, 140, 192, 3);
+    cga.text(`SPD: ${game.boat.speed.toFixed(1)}KT`, 220, 192, 3);
   }
 }
 
-window.V1Renderer = V1Renderer;
+if (typeof window !== 'undefined') window.V1Renderer = V1Renderer;

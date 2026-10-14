@@ -1,6 +1,14 @@
 /**
- * SAILING (1983 - DYNETRON) - LÓGICA DE JOGO, ETAPAS E STORYTELLING EXPANDIDO
- * Gerenciador de missões, diálogos de rádio, etapas e pontuação.
+ * SAILING (1983 - DYNETRON COMPANY)
+ * State Management, 3 Historical Legs & Storytelling (Versão 1)
+ *
+ * Implements:
+ * - 3 authentic legs with realistic trade winds:
+ *   Leg 1: Miami -> Bermuda (Headwind from 060°: requires authentic tacking / zig-zag!)
+ *   Leg 2: Bermuda -> Puerto Rico (Crosswind from 090°: fast beam reach)
+ *   Leg 3: Puerto Rico -> Miami (Tailwind from 115°: broad reach through anomalies)
+ * - Sector flip transitions with PC speaker tick
+ * - Swimmer rescue, collision physics, hazard interaction, score and lives tracking
  */
 
 class V1Game {
@@ -9,8 +17,8 @@ class V1Game {
     this.boat = new V1Boat();
 
     this.state = 'TITLE'; // 'TITLE', 'INSTRUCTIONS', 'LEG_INTRO', 'PLAYING', 'LEG_COMPLETE', 'GAMEOVER', 'VICTORY'
-    this.currentInstruction = 'O'; // 'O', 'C', 'S', 'H', 'G', 'A'
-    this.instructionPage = 0;
+    this.currentInstruction = 'O';
+    this.allInstructionsMode = false;
 
     this.leg = 1;
     this.isPractice = false;
@@ -18,12 +26,16 @@ class V1Game {
     this.score = 0;
     this.elapsedTime = 0;
 
-    // Vento da etapa (0° = sopra para o Norte / Cima)
-    this.windDir = 20;
+    // Wind direction (direction wind blows FROM: 0 = North, 90 = East, 180 = South, 270 = West)
+    this.windDir = 60;
     this.windSpeed = 16;
     this.windShiftTimer = 0;
 
-    // Mensagem de rádio temporária na tela (para os resgates narrativos)
+    // Sector tracking for flip-screen transitions
+    this.lastSecX = 1;
+    this.lastSecY = 2;
+
+    // Radio message banner
     this.radioMessage = "";
     this.radioTimer = 0;
   }
@@ -32,7 +44,6 @@ class V1Game {
     this.isPractice = false;
     this.lives = 4;
     this.score = 0;
-    this.leg = 1;
     this.startLeg(1);
   }
 
@@ -40,7 +51,6 @@ class V1Game {
     this.isPractice = true;
     this.lives = 99;
     this.score = 0;
-    this.leg = 1;
     this.startLeg(1);
   }
 
@@ -78,32 +88,35 @@ class V1Game {
     this.radioMessage = "";
     this.map.setupLeg(legNum);
 
-    // Posições de largada de cada etapa e ventos favoráveis da rota
     if (legNum === 1) {
-      // Largada na costa de Miami rumo a Nordeste (60°)
-      // Vento alísio de Sudeste (140°) - Través perfeito com vento forte!
-      this.boat.reset(270, 430, 60);
-      this.boat.speed = 2.4;
-      this.boat.sailTrim = 42;
-      this.windDir = 140;
-      this.windSpeed = 18;
+      // LEG 1: Miami (Sector 1,2) -> Bermuda (Sector 6,0)
+      // Course is ~065° NE. Wind blows from 060° (Direct Headwind!).
+      // Start close-hauled on port tack (018°), beating upwind!
+      this.boat.reset(276, 450, 18);
+      this.boat.speed = 3.6;
+      this.boat.sheetAngle = 16;
+      this.windDir = 60;
+      this.windSpeed = 17;
     } else if (legNum === 2) {
-      // Largada em Hamilton (Bermudas) rumo ao Sul (190°)
-      // Vento de Leste (85°) - Través com velocidade máxima!
-      this.boat.reset(1300, 260, 190);
-      this.boat.speed = 2.6;
-      this.boat.sailTrim = 48;
-      this.windDir = 85;
-      this.windSpeed = 20;
+      // LEG 2: Bermuda (Sector 6,0) -> Puerto Rico (Sector 5,4)
+      // Course is ~170° S. Wind blows from 090° (Beam Reach!)
+      this.boat.reset(1220, 150, 170);
+      this.boat.speed = 4.2;
+      this.boat.sheetAngle = 45;
+      this.windDir = 90;
+      this.windSpeed = 19;
     } else {
-      // Largada em San Juan rumo a Noroeste (310°)
-      // Vento de Leste-Sudeste (120°) - Alheta veloz!
-      this.boat.reset(1120, 910, 310);
-      this.boat.speed = 2.8;
-      this.boat.sailTrim = 62;
-      this.windDir = 120;
-      this.windSpeed = 22;
+      // LEG 3: Puerto Rico (Sector 5,4) -> Miami (Sector 0,1)
+      // Course is ~305° NW. Wind blows from 115° (Broad Reach!)
+      this.boat.reset(1030, 840, 305);
+      this.boat.speed = 4.5;
+      this.boat.sheetAngle = 60;
+      this.windDir = 115;
+      this.windSpeed = 21;
     }
+
+    this.lastSecX = Math.floor(this.boat.x / this.map.SECTOR_W);
+    this.lastSecY = Math.floor(this.boat.y / this.map.SECTOR_H);
 
     if (window.v1Audio) window.v1Audio.legStart();
   }
@@ -118,130 +131,140 @@ class V1Game {
 
     this.elapsedTime += dt;
 
-    // Atualiza partículas de vento na água
-    if (this.map.updateWindParticles) {
-      this.map.updateWindParticles(dt, this.windDir, this.windSpeed);
-    }
-
-    // Atualiza som ambiente do vento e da água
-    if (window.v1Audio && window.v1Audio.updateWind) {
-      window.v1Audio.updateWind(this.windSpeed, this.boat.speed, this.boat.isLuffing);
-    }
-
-    // Temporizador de mensagem de rádio
+    // Radio banner timer
     if (this.radioTimer > 0) {
       this.radioTimer -= dt;
       if (this.radioTimer <= 0) this.radioMessage = "";
     }
 
-    // Variação de vento
+    // Gentle realistic wind oscillations (+-5°) every 18 seconds
     this.windShiftTimer += dt;
-    if (this.windShiftTimer > 15) {
+    if (this.windShiftTimer > 18) {
       this.windShiftTimer = 0;
-      this.windDir = (this.windDir + (Math.random() * 20 - 10) + 360) % 360;
+      const shift = (Math.random() - 0.5) * 8;
+      this.windDir = (this.windDir + shift + 360) % 360;
     }
 
-    // 1. Atualizar física do barco
+    // 1. Update boat aerodynamics & motion
     this.boat.update(dt, this.windDir, this.windSpeed);
 
-    // 2. Atualizar perigos do mapa
+    // 2. Check sector flip transitions
+    const curSecX = Math.floor(this.boat.x / this.map.SECTOR_W);
+    const curSecY = Math.floor(this.boat.y / this.map.SECTOR_H);
+
+    if (curSecX !== this.lastSecX || curSecY !== this.lastSecY) {
+      this.lastSecX = curSecX;
+      this.lastSecY = curSecY;
+      if (window.v1Audio && window.v1Audio.sectorFlipTick) {
+        window.v1Audio.sectorFlipTick();
+      }
+    }
+
+    // 3. World bounds check
+    if (this.boat.x < 10) { this.boat.x = 10; this.boat.speed *= 0.5; }
+    if (this.boat.x > this.map.width - 10) { this.boat.x = this.map.width - 10; this.boat.speed *= 0.5; }
+    if (this.boat.y < 10) { this.boat.y = 10; this.boat.speed *= 0.5; }
+    if (this.boat.y > this.map.height - 10) { this.boat.y = this.map.height - 10; this.boat.speed *= 0.5; }
+
+    // 4. Update dynamic hazards
     this.map.updateHazards(dt);
 
-    // 3. Checagem de resgate de náufragos
+    // 5. Swimmer rescue check
     for (const s of this.map.swimmers) {
       if (!s.rescued) {
         const dx = s.x - this.boat.x;
         const dy = s.y - this.boat.y;
-        if (dx * dx + dy * dy < 28 * 28) {
+        if (dx * dx + dy * dy < 24 * 24) {
           s.rescued = true;
           this.score += 500;
-          this.radioMessage = `SOS RESGATADO: "${s.lore}"`;
-          this.radioTimer = 4.5;
+          this.radioMessage = `SOS RESCUED: ${s.name}`;
+          this.radioTimer = 4.0;
           if (window.v1Audio) window.v1Audio.rescueDing();
         }
       }
     }
 
-    // 4. Checagem de colisões com terra firme e recifes
+    // 6. Island and reef collisions
     if (this.map.checkLandCollision(this.boat.x, this.boat.y)) {
-      this.boat.damage = Math.min(100, this.boat.damage + 15 * dt);
-      this.boat.speed = Math.max(0, this.boat.speed - 3 * dt);
-      if (Math.random() < 0.2 && window.v1Audio) window.v1Audio.crashThud();
-    }
-
-    if (this.map.checkReefCollision(this.boat.x, this.boat.y)) {
-      this.boat.damage = Math.min(100, this.boat.damage + 25 * dt);
+      this.boat.damage = Math.min(100, this.boat.damage + 18 * dt);
+      this.boat.speed = Math.max(0, this.boat.speed - 3.5 * dt);
+      this.radioMessage = "WARNING: RUN AGROUND ON SHOAL!";
+      this.radioTimer = 1.5;
       if (Math.random() < 0.15 && window.v1Audio) window.v1Audio.crashThud();
     }
 
-    // 5. Checagem com perigos dinâmicos
-    for (const h of this.map.hazards) {
-      const dx = h.x - this.boat.x;
-      const dy = h.y - this.boat.y;
+    if (this.map.checkReefCollision(this.boat.x, this.boat.y)) {
+      this.boat.damage = Math.min(100, this.boat.damage + 28 * dt);
+      this.boat.speed = Math.max(0, this.boat.speed - 4.0 * dt);
+      this.radioMessage = "ALERT: REEF IMPACT!";
+      this.radioTimer = 1.5;
+      if (Math.random() < 0.15 && window.v1Audio) window.v1Audio.crashThud();
+    }
+
+    // 7. Hazard interactions
+    for (const haz of this.map.hazards) {
+      const dx = haz.x - this.boat.x;
+      const dy = haz.y - this.boat.y;
       const distSq = dx * dx + dy * dy;
 
-      if (h.type === 'shark' && distSq < 22 * 22) {
-        this.boat.damage = Math.min(100, this.boat.damage + 12);
-        this.radioMessage = "! ALERTA: ATAQUE DE TUBARÃO NO CASCO !";
+      if (haz.type === 'shark' && distSq < 20 * 20) {
+        this.boat.damage = Math.min(100, this.boat.damage + 10);
+        this.radioMessage = "ALERT: SHARK STRIKE ON HULL!";
         this.radioTimer = 2.5;
         if (window.v1Audio) window.v1Audio.crashThud();
-      } else if (h.type === 'speedboat' && distSq < 30 * 30) {
-        this.boat.damage = Math.min(100, this.boat.damage + 30);
-        this.radioMessage = "! COLISÃO COM LANCHA DESGOVERNADA !";
+      } else if (haz.type === 'speedboat' && distSq < 26 * 26) {
+        this.boat.damage = Math.min(100, this.boat.damage + 25);
+        this.radioMessage = "ALERT: SPEEDBOAT COLLISION!";
         this.radioTimer = 2.5;
         if (window.v1Audio) window.v1Audio.crashThud();
-      } else if (h.type === 'whirlwind' && distSq < h.r * h.r) {
-        // Redemoinho dimensional: teletransporte!
-        this.boat.x = 400 + Math.random() * 800;
-        this.boat.y = 300 + Math.random() * 500;
-        this.radioMessage = "*** SALTO ESPACIAL: ENGOLIDO PELO REDEMOINHO! ***";
+      } else if (haz.type === 'whirlwind' && distSq < haz.r * haz.r) {
+        // Spatial displacement
+        this.boat.x = 200 + Math.random() * (this.map.width - 400);
+        this.boat.y = 200 + Math.random() * (this.map.height - 400);
+        this.radioMessage = "*** VORTEX TIME-SLIP WARP! ***";
         this.radioTimer = 4.0;
         if (window.v1Audio) window.v1Audio.whirlwindWarp();
-      } else if (h.type === 'alien_anomaly' && distSq < h.r * h.r) {
-        // Entidade cristalina: distorção eletromagnética
-        this.score += 10;
-        this.radioMessage = "☯ ENTIDADE CRISTALINA DETECTADA: SINAL TELEPÁTICO ☯";
+      } else if (haz.type === 'anomaly' && distSq < haz.r * haz.r) {
+        this.score += 20;
+        this.radioMessage = "PSYCHIC ANOMALY PULSE DETECTED";
         this.radioTimer = 2.0;
-        if (Math.random() < 0.08 && window.v1Audio) window.v1Audio.alienChime();
+        if (Math.random() < 0.08 && window.v1Audio) window.v1Audio.anomalyChime();
       }
     }
 
-    // Se dano chegar a 100%, perde uma vida
+    // 8. Damage check / life loss
     if (this.boat.damage >= 100) {
       this.lives--;
       if (this.lives <= 0) {
         this.state = 'GAMEOVER';
-        return;
+        if (window.v1Audio) window.v1Audio.gameOver();
       } else {
-        // Reinicia a etapa
         this.startLeg(this.leg);
-        return;
       }
+      return;
     }
 
-    // 6. Checagem de entrada no porto de chegada
-    const currentPort = this.map.ports[this.leg];
-    const pdx = (currentPort.x + currentPort.w / 2) - this.boat.x;
-    const pdy = (currentPort.y + currentPort.h / 2) - this.boat.y;
-
-    if (Math.abs(pdx) < currentPort.w && Math.abs(pdy) < currentPort.h) {
-      // Chegou ao porto!
-      const unrescued = this.map.swimmers.filter(s => !s.rescued).length;
-      if (unrescued === 0 || this.isPractice) {
-        this.completeLeg();
-      } else {
-        this.radioMessage = `AINDA RESTAM ${unrescued} NÁUFRAGOS NO MAR!`;
-        this.radioTimer = 2.5;
+    // 9. Check destination harbour entry
+    const port = this.map.ports[this.leg];
+    if (port) {
+      const pdx = (port.x + port.w / 2) - this.boat.x;
+      const pdy = (port.y + port.h / 2) - this.boat.y;
+      if (Math.abs(pdx) < port.w && Math.abs(pdy) < port.h) {
+        const unrescued = this.map.swimmers.filter(s => !s.rescued).length;
+        if (unrescued === 0 || this.isPractice) {
+          this.completeLeg();
+        } else {
+          this.radioMessage = `${unrescued} CASTAWAY(S) REMAIN IN WATER!`;
+          this.radioTimer = 2.0;
+        }
       }
     }
   }
 
   completeLeg() {
     this.state = 'LEG_COMPLETE';
-    // Bônus de tempo
     const timeBonus = Math.max(0, 300 - Math.floor(this.elapsedTime)) * 10;
     this.score += 2000 + timeBonus;
-
     if (window.v1Audio) window.v1Audio.portVictory();
 
     if (this.leg >= 3) {
@@ -258,4 +281,4 @@ class V1Game {
   }
 }
 
-window.V1Game = V1Game;
+if (typeof window !== 'undefined') window.V1Game = V1Game;

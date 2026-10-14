@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="pt-BR">
+<html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -12,46 +12,48 @@
 <body>
   <!-- Barra de Alternância de Versão -->
   <div class="version-nav-bar">
-    <span class="active-tag">&#9670; VOCÊ ESTÁ NA: VERSÃO 1 (DYNETRON 1983 - ORIGINAL DAS SUAS FOTOS)</span>
-    <a href="versao2.html" class="switch-btn">IR PARA VERSÃO 2 (3D WIREFRAME 1986) &#9654;</a>
+    <span class="active-tag">&#9670; YOU ARE PLAYING: VERSION 1 (DYNETRON 1983 - AUTHENTIC CGA)</span>
+    <a href="versao2.html" class="switch-btn">SWITCH TO VERSION 2 (3D WIREFRAME 1986) &#9654;</a>
   </div>
 
   <!-- Gabinete do Monitor Retrô PC-XT -->
   <div class="monitor-frame">
     <div class="bezel-header">
-      <span>IBM PC / PC-186 // CGA GRAPHICS 320x200</span>
+      <span>IBM PC / PC-XT // CGA MODE 4 (320x200 PALETTE 0)</span>
       <span>DYNETRON COMPANY &copy; 1983</span>
     </div>
 
     <!-- Tubo CRT de Imagem com os 3 Quadrantes -->
     <div class="crt-tube">
-      <canvas id="v1GameCanvas" width="640" height="400"></canvas>
+      <canvas id="v1GameCanvas" width="320" height="200"></canvas>
     </div>
 
     <!-- Barra de Atalhos de Teclado / Menu Rápido -->
     <div class="quick-action-bar">
       <div>
-        <button class="quick-btn" id="btnV1Begin">[B] INICIAR JOGO</button>
-        <button class="quick-btn" id="btnV1Practice">[P] TREINO</button>
-        <button class="quick-btn" id="btnV1Obj">[O] OBJETIVO</button>
-        <button class="quick-btn" id="btnV1Hazards">[H] PERIGOS / ANOMALIAS</button>
-        <button class="quick-btn" id="btnV1Controls">[C] CONTROLES</button>
+        <button class="quick-btn" id="btnV1Begin">[B] BEGIN</button>
+        <button class="quick-btn" id="btnV1Practice">[P] PRACTICE</button>
+        <button class="quick-btn" id="btnV1Obj">[O] OBJECTIVE</button>
+        <button class="quick-btn" id="btnV1Controls">[C] CONTROLS</button>
+        <button class="quick-btn" id="btnV1Hazards">[H] HAZARDS</button>
+        <button class="quick-btn" id="btnV1Telemetry">[T] HUD</button>
       </div>
       <div>
-        <button class="quick-btn" id="btnV1Space">[ESPAÇO] CONTINUAR</button>
+        <button class="quick-btn" id="btnV1Space">[SPACE] CONTINUE</button>
       </div>
     </div>
 
     <!-- Controles Manuais na Tela (D-Pad para Leme e Vela) -->
     <div class="touch-bar">
-      <button class="t-v1-btn" id="v1PadLeft">&larr; LEME (BOMBORDO)</button>
-      <button class="t-v1-btn" id="v1PadUp">&uarr; CAÇAR VELA</button>
-      <button class="t-v1-btn" id="v1PadDown">&darr; FILAR VELA</button>
-      <button class="t-v1-btn" id="v1PadRight">LEME (BORESTE) &rarr;</button>
+      <button class="t-v1-btn" id="v1PadLeft">&larr; PORT (LEFT)</button>
+      <button class="t-v1-btn" id="v1PadUp">&uarr; SHEET IN</button>
+      <button class="t-v1-btn" id="v1PadDown">&darr; EASE SHEET</button>
+      <button class="t-v1-btn" id="v1PadRight">STBD (RIGHT) &rarr;</button>
     </div>
   </div>
 
   <!-- Scripts da Versão 1 -->
+  <script src="js/v1/v1-cga.js"></script>
   <script src="js/v1/v1-audio.js"></script>
   <script src="js/v1/v1-map.js"></script>
   <script src="js/v1/v1-boat.js"></script>
