@@ -1,0 +1,511 @@
+/* ==========================================================================
+   SAILING (1986) - ESTILO RETRÔ DE MONITOR CRT & PC DOS ANOS 80
+   ========================================================================== */
+
+:root {
+  --bezel-color: #c9c1b1;
+  --bezel-shadow: #8d8574;
+  --bezel-highlight: #ece5d8;
+  --crt-curve-radius: 18px;
+  
+  /* Paleta Padrão: Fósforo Verde P31 */
+  --crt-bg: #030d06;
+  --crt-fg: #33ff66;
+  --crt-glow: rgba(51, 255, 102, 0.45);
+  --crt-dim: #15662a;
+  --crt-border: #1f8538;
+  --crt-accent: #66ff88;
+}
+
+/* Modificadores de Paleta de Monitor */
+body.palette-green {
+  --crt-bg: #020a04;
+  --crt-fg: #33ff66;
+  --crt-glow: rgba(51, 255, 102, 0.45);
+  --crt-dim: #135222;
+  --crt-border: #1e7533;
+  --crt-accent: #88ffaa;
+}
+
+body.palette-amber {
+  --crt-bg: #0f0701;
+  --crt-fg: #ffb000;
+  --crt-glow: rgba(255, 176, 0, 0.45);
+  --crt-dim: #7a5400;
+  --crt-border: #9e6d00;
+  --crt-accent: #ffd266;
+}
+
+body.palette-white {
+  --crt-bg: #090c10;
+  --crt-fg: #d0e0ec;
+  --crt-glow: rgba(208, 224, 236, 0.4);
+  --crt-dim: #5c6c78;
+  --crt-border: #7c90a0;
+  --crt-accent: #ffffff;
+}
+
+body.palette-cga {
+  --crt-bg: #000000;
+  --crt-fg: #55ffff;
+  --crt-glow: rgba(85, 255, 255, 0.4);
+  --crt-dim: #00aaaa;
+  --crt-border: #ff55ff;
+  --crt-accent: #ff55ff;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+  user-select: none;
+}
+
+body {
+  background-color: #121417;
+  color: var(--crt-fg);
+  font-family: 'VT323', 'Courier New', monospace;
+  font-size: 20px;
+  line-height: 1.2;
+  min-height: 100vh;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 15px;
+  overflow-x: hidden;
+}
+
+/* Gabinete Bege Retrô estilo IBM PC 5150 / XT */
+.crt-monitor-case {
+  background: linear-gradient(145deg, var(--bezel-highlight) 0%, var(--bezel-color) 40%, var(--bezel-shadow) 100%);
+  border-radius: 24px;
+  padding: 24px 28px 18px 28px;
+  box-shadow: 
+    0 25px 60px rgba(0, 0, 0, 0.85),
+    inset 0 2px 4px rgba(255, 255, 255, 0.5),
+    inset 0 -4px 6px rgba(0, 0, 0, 0.4);
+  border: 4px solid #b5ad9e;
+  max-width: 1100px;
+  width: 100%;
+}
+
+.brand-badge {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+  padding: 0 8px;
+  color: #4a453b;
+  font-size: 15px;
+  font-weight: bold;
+  letter-spacing: 2px;
+}
+
+.badge-logo {
+  color: #6d6657;
+  letter-spacing: 4px;
+}
+
+/* Moldura e Tela do Tubo de Imagem CRT */
+.monitor-bezel {
+  display: flex;
+  flex-direction: column;
+}
+
+.crt-screen {
+  position: relative;
+  background-color: var(--crt-bg);
+  border-radius: var(--crt-curve-radius);
+  overflow: hidden;
+  box-shadow: 
+    inset 0 0 50px rgba(0, 0, 0, 0.9),
+    inset 0 0 10px rgba(0, 0, 0, 0.7),
+    0 0 12px var(--crt-glow);
+  border: 12px solid #1c1d1a;
+  aspect-ratio: 16 / 10;
+  width: 100%;
+  display: block;
+}
+
+/* Efeito de Vidro Curvado e Scanlines */
+.crt-scanlines {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  background: repeating-linear-gradient(
+    0deg,
+    rgba(0, 0, 0, 0.35) 0px,
+    rgba(0, 0, 0, 0.35) 1px,
+    transparent 1px,
+    transparent 3px
+  );
+  z-index: 10;
+  opacity: 0.75;
+  transition: opacity 0.3s ease;
+}
+
+body:not(.crt-active) .crt-scanlines {
+  opacity: 0;
+}
+
+.crt-glow-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  background: radial-gradient(circle at 50% 50%, rgba(255, 255, 255, 0.05) 0%, rgba(0, 0, 0, 0.5) 85%);
+  z-index: 11;
+}
+
+/* Flicker sutil de tubo de raios catódicos */
+@keyframes flicker {
+  0% { opacity: 0.98; }
+  50% { opacity: 1; }
+  100% { opacity: 0.98; }
+}
+
+.crt-flicker {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  background-color: rgba(255, 255, 255, 0.015);
+  animation: flicker 0.12s infinite;
+  z-index: 12;
+}
+
+/* Canvas de Jogo */
+#gameCanvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+  background-color: transparent;
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
+}
+
+/* Painéis de UI e Menus Retrô */
+.ui-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 15;
+  pointer-events: none;
+}
+
+.screen-panel {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-color: rgba(3, 13, 6, 0.92);
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  padding: 30px;
+  text-align: center;
+  pointer-events: auto;
+  transition: opacity 0.25s ease, transform 0.25s ease;
+}
+
+.screen-panel.hidden {
+  opacity: 0;
+  pointer-events: none;
+  transform: scale(0.98);
+}
+
+.ascii-banner {
+  font-family: monospace;
+  font-size: 16px;
+  line-height: 1.1;
+  color: var(--crt-fg);
+  text-shadow: 0 0 10px var(--crt-glow);
+  margin-bottom: 20px;
+}
+
+.system-bios-text {
+  margin-bottom: 25px;
+  letter-spacing: 1px;
+}
+
+.system-bios-text p {
+  margin: 6px 0;
+}
+
+.blink-text {
+  animation: blink 1s step-start infinite;
+  color: var(--crt-accent);
+  font-weight: bold;
+  letter-spacing: 2px;
+}
+
+@keyframes blink {
+  50% { opacity: 0; }
+}
+
+.menu-options {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: 100%;
+  max-width: 460px;
+}
+
+.retro-btn {
+  background-color: transparent;
+  color: var(--crt-fg);
+  border: 2px solid var(--crt-border);
+  font-family: inherit;
+  font-size: 22px;
+  padding: 10px 16px;
+  cursor: pointer;
+  letter-spacing: 1.5px;
+  text-align: left;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  transition: all 0.15s ease;
+  text-shadow: 0 0 6px var(--crt-glow);
+}
+
+.retro-btn:hover {
+  background-color: var(--crt-fg);
+  color: var(--crt-bg);
+  box-shadow: 0 0 14px var(--crt-glow);
+}
+
+.retro-btn .btn-num {
+  color: var(--crt-accent);
+}
+
+.retro-btn:hover .btn-num {
+  color: var(--crt-bg);
+}
+
+.footer-specs {
+  margin-top: 25px;
+  font-size: 16px;
+  color: var(--crt-dim);
+  letter-spacing: 1px;
+}
+
+/* Conteúdo de Ajuda */
+.help-content {
+  display: flex;
+  gap: 30px;
+  text-align: left;
+  margin: 20px 0;
+  max-width: 780px;
+}
+
+.help-column {
+  flex: 1;
+  background-color: rgba(0, 0, 0, 0.4);
+  padding: 15px;
+  border: 1px solid var(--crt-dim);
+}
+
+.help-column h3 {
+  color: var(--crt-accent);
+  margin-bottom: 12px;
+  font-size: 20px;
+  border-bottom: 1px dashed var(--crt-dim);
+  padding-bottom: 4px;
+}
+
+.help-column p {
+  margin: 8px 0;
+  font-size: 18px;
+}
+
+.key {
+  display: inline-block;
+  padding: 2px 8px;
+  background: var(--crt-dim);
+  color: var(--crt-bg);
+  font-weight: bold;
+  border-radius: 3px;
+}
+
+/* Fim de Jogo */
+.endgame-stats {
+  margin: 20px 0;
+  font-size: 24px;
+  line-height: 1.4;
+  border-top: 1px dashed var(--crt-border);
+  border-bottom: 1px dashed var(--crt-border);
+  padding: 15px 30px;
+}
+
+.endgame-actions {
+  display: flex;
+  gap: 20px;
+}
+
+/* Barra Inferior de Comandos e Controles do Gabinete Físico */
+.monitor-controls-bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 14px;
+  padding: 10px 14px;
+  background: linear-gradient(180deg, #302d26 0%, #1e1c17 100%);
+  border-radius: 8px;
+  border: 2px solid #4a453b;
+  box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.5), 0 2px 4px rgba(0, 0, 0, 0.3);
+}
+
+.ctrl-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.ctrl-label {
+  font-size: 14px;
+  color: #888;
+  letter-spacing: 1px;
+}
+
+.mini-btn {
+  background-color: #2b2b2b;
+  color: #aaa;
+  border: 1px solid #444;
+  font-family: inherit;
+  font-size: 16px;
+  padding: 4px 10px;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.mini-btn:hover {
+  background-color: #3d3d3d;
+  color: #fff;
+}
+
+.mini-btn.active {
+  background-color: #4a4a4a;
+  color: #33ff66;
+  border-color: #666;
+  box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.4);
+}
+
+body.palette-amber .mini-btn.active {
+  color: #ffb000;
+}
+
+body.palette-white .mini-btn.active {
+  color: #ffffff;
+}
+
+body.palette-cga .mini-btn.active {
+  color: #55ffff;
+}
+
+/* Painel de Alimentação do Monitor */
+.monitor-power-panel {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 14px;
+  padding: 0 6px;
+}
+
+.power-led-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.power-led {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background-color: #ff3333;
+  box-shadow: 0 0 8px #ff2222;
+  border: 1px solid #660000;
+  animation: ledPulse 2s infinite ease-in-out;
+}
+
+@keyframes ledPulse {
+  0%, 100% { opacity: 0.8; }
+  50% { opacity: 1; box-shadow: 0 0 12px #ff4444; }
+}
+
+.power-text {
+  font-size: 14px;
+  color: #555;
+  font-weight: bold;
+}
+
+.crt-brand {
+  font-size: 14px;
+  color: #6a6455;
+  letter-spacing: 1.5px;
+}
+
+/* Controles Touch na Tela para Dispositivos Móveis */
+.touch-controls {
+  display: none;
+  position: absolute;
+  bottom: 20px;
+  right: 20px;
+  z-index: 20;
+}
+
+.touch-dpad {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+}
+
+.t-horizontal {
+  display: flex;
+  gap: 12px;
+}
+
+.t-btn {
+  background-color: rgba(0, 0, 0, 0.6);
+  color: var(--crt-fg);
+  border: 1px solid var(--crt-border);
+  padding: 12px 18px;
+  font-family: inherit;
+  font-size: 18px;
+  border-radius: 6px;
+  touch-action: manipulation;
+}
+
+.t-btn:active {
+  background-color: var(--crt-fg);
+  color: var(--crt-bg);
+}
+
+@media (max-width: 850px) {
+  body {
+    padding: 4px;
+  }
+  .crt-monitor-case {
+    padding: 10px;
+    border-radius: 12px;
+  }
+  .monitor-controls-bar {
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  .touch-controls {
+    display: block;
+  }
+}

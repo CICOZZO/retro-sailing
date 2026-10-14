@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SAILING (VERSÃO 2) - 1986 Wireframe 3D Simulation</title>
+  <link rel="stylesheet" href="style.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=VT323&display=swap" rel="stylesheet">
+  <style>
+    .version-switch-header {
+      width: 100%;
+      max-width: 1100px;
+      margin-bottom: 10px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      background: #1e221d;
+      border: 2px solid #33ff66;
+      padding: 8px 16px;
+      border-radius: 8px;
+    }
+    .version-switch-header a {
+      color: #33ff66;
+      text-decoration: none;
+      font-weight: bold;
+      font-size: 18px;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .version-switch-header a:hover {
+      text-decoration: underline;
+    }
+    .current-version-tag {
+      color: #aaa;
+      font-size: 16px;
+    }
+  </style>
+</head>
+<body class="palette-green crt-active" style="flex-direction: column;">
+  <!-- Barra de Alternância de Versão -->
+  <div class="version-switch-header">
+    <a href="index.html">&#9664; MUDAR PARA VERSÃO 1 (DYNETRON 1983 - ORIGINAL DAS SUAS FOTOS)</a>
+    <span class="current-version-tag">VOCÊ ESTÁ NA: VERSÃO 2 (3D WIREFRAME 1986)</span>
+  </div>
+
+  <!-- Gabinete do Monitor CRT Retrô -->
+  <div class="crt-monitor-case">
+    <div class="monitor-bezel">
+      <div class="brand-badge">
+        <span class="badge-logo">&#9646;&#9646;&#9646;</span>
+        <span class="badge-text">PC-186 COMPATIBLE // 640K RAM // VETOR-GRAPH 3D</span>
+      </div>
+
+      <!-- Tela de Fósforo do Tubo de Imagem -->
+      <div class="crt-screen" id="crtScreen">
+        <!-- Scanlines e Efeito de Curvatura CRT -->
+        <div class="crt-scanlines"></div>
+        <div class="crt-glow-overlay"></div>
+        <div class="crt-flicker"></div>
+
+        <!-- Canvas Principal de Renderização Vetorial (3D + Radar) -->
+        <canvas id="gameCanvas" width="1024" height="640"></canvas>
+
+        <!-- Overlay de Menus e Mensagens Retrô -->
+        <div id="uiOverlay" class="ui-overlay">
+          <!-- Tela de Boot / Título -->
+          <div id="titleScreen" class="screen-panel">
+            <pre class="ascii-banner">
+  _____         _____ _      _____ _   _  _____ 
+ / ____|  /\   |_   _| |    |_   _| \ | |/ ____|
+| (___   /  \    | | | |      | | |  \| | |  __ 
+ \___ \ / /\ \   | | | |      | | | . ` | | |_ |
+ ____) / ____ \ _| |_| |____ _| |_| |\  | |__| |
+|_____/_/    \_\_____|______|_____|_| \_|\_____|
+            </pre>
+            <div class="system-bios-text">
+              <p>MS-DOS 3.30 COMPATIBLE SYSTEM -- BIOS DATE: 04/18/86</p>
+              <p>SIMULADOR NÁUTICO 3D EM GRÁFICOS VETORIAIS ("PONTOS E TRAÇOS")</p>
+              <p class="blink-text">PRESSIONE ESPAÇO OU CLIQUE PARA INICIAR</p>
+            </div>
+
+            <div class="menu-options">
+              <button class="retro-btn" id="btnModeRegatta">
+                <span class="btn-num">[1]</span> DESAFIO DA TAÇA (REGATA 3D)
+              </button>
+              <button class="retro-btn" id="btnModeBermuda">
+                <span class="btn-num">[2]</span> RESGATE NO TRIÂNGULO DAS BERMUDAS
+              </button>
+              <button class="retro-btn" id="btnHelp">
+                <span class="btn-num">[H]</span> COMO JOGAR / TECLAS DE NAVEGAÇÃO
+              </button>
+            </div>
+            
+            <div class="footer-specs">
+              MEMÓRIA DISPONÍVEL: 584 KB &bull; SUPORTE HERCULES / CGA / FÓSFORO
+            </div>
+          </div>
+
+          <!-- Modal de Instruções -->
+          <div id="helpModal" class="screen-panel hidden">
+            <h2>=== MANUAL DO VELEJADOR (1986) ===</h2>
+            <div class="help-content">
+              <div class="help-column">
+                <h3>CONTROLES DO LEME E VELA</h3>
+                <p><span class="key">&larr;</span> / <span class="key">A</span> : Leme para Bombordo (Esquerda)</p>
+                <p><span class="key">&rarr;</span> / <span class="key">D</span> : Leme para Boreste (Direita)</p>
+                <p><span class="key">&uarr;</span> / <span class="key">W</span> : Caçar Vela (Puxar para o centro)</p>
+                <p><span class="key">&darr;</span> / <span class="key">S</span> : Filar Vela (Soltar para fora)</p>
+                <p><span class="key">V</span> : Alternar Câmera (3ª Pessoa / Proa)</p>
+              </div>
+              <div class="help-column">
+                <h3>FÍSICA DA VELA (COMO NAVEGAR)</h3>
+                <p>&bull; <strong>NO-GO ZONE ("EM FERRO"):</strong> Se apontar a proa contra o vento, as velas batem (linhas tracejadas), o barco para e o alarme apita!</p>
+                <p>&bull; <strong>TRAVÉS (90&deg; do vento):</strong> Ponto de maior velocidade! Vela em 45&deg;.</p>
+                <p>&bull; <strong>BORDEJAR:</strong> Para ir contra o vento, faça zigue-zague!</p>
+              </div>
+            </div>
+            <button class="retro-btn" id="btnCloseHelp">[VOLTAR AO MENU]</button>
+          </div>
+
+          <!-- Tela de Fim de Jogo / Vitória -->
+          <div id="endGameModal" class="screen-panel hidden">
+            <h2 id="endGameTitle">FIM DE ETAPA</h2>
+            <p id="endGameMessage"></p>
+            <div class="endgame-stats" id="endGameStats"></div>
+            <div class="endgame-actions">
+              <button class="retro-btn" id="btnRestartGame">[JOGAR NOVAMENTE]</button>
+              <button class="retro-btn" id="btnMenuReturn">[MENU PRINCIPAL]</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Controles Virtuais Touch (Mobile / Tablet) -->
+        <div class="touch-controls" id="touchControls">
+          <div class="touch-dpad">
+            <button class="t-btn" id="tUp" title="Caçar Vela">&uarr; VELA</button>
+            <div class="t-horizontal">
+              <button class="t-btn" id="tLeft" title="Leme Esquerda">&larr; LEME</button>
+              <button class="t-btn" id="tRight" title="Leme Direita">LEME &rarr;</button>
+            </div>
+            <button class="t-btn" id="tDown" title="Filar Vela">&darr; VELA</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Barra Inferior de Comandos e Controles do Monitor (No Gabinete Físico) -->
+      <div class="monitor-controls-bar">
+        <div class="ctrl-group">
+          <span class="ctrl-label">FÓSFORO:</span>
+          <button class="mini-btn active" id="paletteGreen" title="Fósforo Verde (P31)">VERDE</button>
+          <button class="mini-btn" id="paletteAmber" title="Fósforo Âmbar (P20)">ÂMBAR</button>
+          <button class="mini-btn" id="paletteWhite" title="Monocromático Branco">BRANCO</button>
+          <button class="mini-btn" id="paletteCga" title="CGA 4 Cores">CGA</button>
+        </div>
+
+        <div class="ctrl-group">
+          <button class="mini-btn" id="btnToggleLayout" title="Alternar entre tela dividida ou 3D completa">VISÃO: DIVIDIDA [TAB]</button>
+          <button class="mini-btn" id="btnToggleCamera">CÂMERA [V]</button>
+          <button class="mini-btn" id="btnToggleAudio">SOM: ON [M]</button>
+          <button class="mini-btn" id="btnToggleScanlines">SCANLINES: ON</button>
+          <button class="mini-btn" id="btnResetCourse">REINICIAR [R]</button>
+        </div>
+      </div>
+      <!-- Led de Energia e Botão de Força do Monitor -->
+      <div class="monitor-power-panel">
+        <div class="power-led-group">
+          <span class="power-led"></span>
+          <span class="power-text">POWER / DRIVE A:</span>
+        </div>
+        <div class="crt-brand">SAILING v2.0 (1986 3D) &bull; TOM SNYDER / MINDSCAPE TRIBUTE</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Scripts do Jogo Versão 2 -->
+  <script src="js/audio.js"></script>
+  <script src="js/vector3d.js"></script>
+  <script src="js/physics.js"></script>
+  <script src="js/renderer.js"></script>
+  <script src="js/game.js"></script>
+  <script src="js/main.js"></script>
+</body>
+</html>

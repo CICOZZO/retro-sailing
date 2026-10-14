@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SAILING (1983 - Dynetron Company) - An Adventure in the Bermuda Triangle</title>
+  <link rel="stylesheet" href="css/v1-dynetron.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=VT323&display=swap" rel="stylesheet">
+</head>
+<body>
+  <!-- Barra de Alternância de Versão -->
+  <div class="version-nav-bar">
+    <span class="active-tag">&#9670; VOCÊ ESTÁ NA: VERSÃO 1 (DYNETRON 1983 - ORIGINAL DAS SUAS FOTOS)</span>
+    <a href="versao2.html" class="switch-btn">IR PARA VERSÃO 2 (3D WIREFRAME 1986) &#9654;</a>
+  </div>
+
+  <!-- Gabinete do Monitor Retrô PC-XT -->
+  <div class="monitor-frame">
+    <div class="bezel-header">
+      <span>IBM PC / PC-186 // CGA GRAPHICS 320x200</span>
+      <span>DYNETRON COMPANY &copy; 1983</span>
+    </div>
+
+    <!-- Tubo CRT de Imagem com os 3 Quadrantes -->
+    <div class="crt-tube">
+      <canvas id="v1GameCanvas" width="640" height="400"></canvas>
+    </div>
+
+    <!-- Barra de Atalhos de Teclado / Menu Rápido -->
+    <div class="quick-action-bar">
+      <div>
+        <button class="quick-btn" id="btnV1Begin">[B] INICIAR JOGO</button>
+        <button class="quick-btn" id="btnV1Practice">[P] TREINO</button>
+        <button class="quick-btn" id="btnV1Obj">[O] OBJETIVO</button>
+        <button class="quick-btn" id="btnV1Hazards">[H] PERIGOS / ANOMALIAS</button>
+        <button class="quick-btn" id="btnV1Controls">[C] CONTROLES</button>
+      </div>
+      <div>
+        <button class="quick-btn" id="btnV1Space">[ESPAÇO] CONTINUAR</button>
+      </div>
+    </div>
+
+    <!-- Controles Manuais na Tela (D-Pad para Leme e Vela) -->
+    <div class="touch-bar">
+      <button class="t-v1-btn" id="v1PadLeft">&larr; LEME (BOMBORDO)</button>
+      <button class="t-v1-btn" id="v1PadUp">&uarr; CAÇAR VELA</button>
+      <button class="t-v1-btn" id="v1PadDown">&darr; FILAR VELA</button>
+      <button class="t-v1-btn" id="v1PadRight">LEME (BORESTE) &rarr;</button>
+    </div>
+  </div>
+
+  <!-- Scripts da Versão 1 -->
+  <script src="js/v1/v1-audio.js"></script>
+  <script src="js/v1/v1-map.js"></script>
+  <script src="js/v1/v1-boat.js"></script>
+  <script src="js/v1/v1-render.js"></script>
+  <script src="js/v1/v1-game.js"></script>
+  <script src="js/v1/v1-main.js"></script>
+</body>
+</html>
