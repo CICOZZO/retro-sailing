@@ -47,3 +47,9 @@ Jogue diretamente no seu navegador (Desktop, Tablet ou Celular):
 ## 🚀 Como Executar Localmente
 
 Basta abrir o arquivo `index.html` em qualquer navegador web moderno, ou dar duplo clique em `JOGAR.bat` no Windows. Nenhuma instalação ou servidor web é necessário.
+
+---
+
+## 🧪 Teste de fumaça
+
+`node tools/test-chrome-cdp.mjs` abre o Chrome headless, inicia a campanha, navega e confere o estado do jogo (screenshots vão para a pasta TEMP).
