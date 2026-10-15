@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>SAILING (1983 - Dynetron Company) - An Adventure in the Bermuda Triangle</title>
+  <title>SAILING (1982 - Wind Productions) - An Adventure in the Bermuda Triangle</title>
   <link rel="stylesheet" href="css/v1-dynetron.css">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -12,7 +12,7 @@
 <body>
   <!-- Barra de Alternância de Versão -->
   <div class="version-nav-bar">
-    <span class="active-tag">&#9670; YOU ARE PLAYING: VERSION 1 (DYNETRON 1983 - AUTHENTIC CGA)</span>
+    <span class="active-tag">&#9670; YOU ARE PLAYING: VERSION 1 (WIND PRODUCTIONS 1982 - CGA)</span>
     <a href="versao2.html" class="switch-btn">SWITCH TO VERSION 2 (3D WIREFRAME 1986) &#9654;</a>
   </div>
 
@@ -20,7 +20,7 @@
   <div class="monitor-frame">
     <div class="bezel-header">
       <span>IBM PC / PC-XT // CGA MODE 4 (320x200 PALETTE 0)</span>
-      <span>DYNETRON COMPANY &copy; 1983</span>
+      <span>WIND PRODUCTIONS &copy; 1982</span>
     </div>
 
     <!-- Tubo CRT de Imagem com os 3 Quadrantes -->
@@ -35,22 +35,24 @@
         <button class="quick-btn" id="btnV1Practice">[P] PRACTICE</button>
         <button class="quick-btn" id="btnV1Obj">[O] OBJECTIVE</button>
         <button class="quick-btn" id="btnV1Controls">[C] CONTROLS</button>
+        <button class="quick-btn" id="btnV1Scoring">[S] SCORING</button>
         <button class="quick-btn" id="btnV1Hazards">[H] HAZARDS</button>
-        <button class="quick-btn" id="btnV1Telemetry">[T] HUD</button>
+        <button class="quick-btn" id="btnV1Gauges">[G] GAUGES</button>
       </div>
       <div>
         <button class="quick-btn" id="btnV1Space">[SPACE] CONTINUE</button>
       </div>
     </div>
 
-    <!-- Controles Manuais na Tela (D-Pad para Leme e Vela) -->
+    <!-- Controles na tela (equivalem ao teclado numérico) -->
     <div class="touch-bar">
-      <button class="t-v1-btn" id="v1PadLeft">&larr; PORT (LEFT)</button>
-      <button class="t-v1-btn" id="v1PadUp">&uarr; SHEET IN</button>
-      <button class="t-v1-btn" id="v1PadDown">&darr; EASE SHEET</button>
-      <button class="t-v1-btn" id="v1PadRight">STBD (RIGHT) &rarr;</button>
+      <button class="t-v1-btn" id="v1PadLeft">&larr; 4 PORT</button>
+      <button class="t-v1-btn" id="v1PadCenter">5 CENTER</button>
+      <button class="t-v1-btn" id="v1PadRight">6 STBD &rarr;</button>
+      <button class="t-v1-btn" id="v1PadIn">2 SHEET IN</button>
+      <button class="t-v1-btn" id="v1PadOut">8 SHEET OUT</button>
+      <button class="t-v1-btn" id="v1PadEngine">E ENGINE</button>
     </div>
-  </div>
 
   <!-- Scripts da Versão 1 -->
   <script src="js/v1/v1-cga.js"></script>

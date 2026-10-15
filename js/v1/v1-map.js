@@ -1,188 +1,172 @@
 /**
- * SAILING (1983 - DYNETRON COMPANY)
- * Sector Map, Blocky CGA Geography, Swimmers & Hazards (Versão 1)
+ * SAILING (1982 - WIND PRODUCTIONS) - MUNDO, PORTOS E PERIGOS
  *
- * Implements:
- * - 8x6 grid of discrete sectors (184x184 px per sector)
- * - Authentic flip-screen navigation (no modern smooth scrolling)
- * - Blocky CGA green coastlines for Florida, Bahamas, Bermuda, Cuba, Puerto Rico
- * - Swimmers as brown rings, reefs as brown clustered hazards
- * - Bermuda Triangle dynamic hazards (sharks, speedboats, whirlwinds, anomalies)
- * - Destination ports for the 3 Legs
+ * O mundo é uma grade de 7 x 4 "setores" de 184 x 184 px (o tamanho da tela
+ * do mar). A tela troca de setor quando o barco cruza a borda. A moldura mais
+ * externa do mundo é uma parede de caveiras. O mapa pequeno (radar) mostra o
+ * mundo inteiro: costa dos EUA, Cuba, Hispaniola, Bahamas, Bermuda e Porto Rico.
  */
 
 class V1Map {
   constructor() {
-    this.SECTOR_W = 184;
-    this.SECTOR_H = 184;
-    this.COLS = 8;
-    this.ROWS = 6;
-    this.width = this.COLS * this.SECTOR_W;   // 1472
-    this.height = this.ROWS * this.SECTOR_H; // 1104
+    this.CELL = 8;
+    this.CW = 161;           // células de 8 px (7 setores x 23)
+    this.CH = 92;            // 4 setores x 23
+    this.SEC = 184;          // lado de um setor em px
+    this.W = this.CW * this.CELL;
+    this.H = this.CH * this.CELL;
 
-    // Stepped blocky CGA land masses (Green = 1)
-    // Coords in global world space
-    this.islands = [
-      // --- FLORIDA & KEYS (West: Cols 0-1, Rows 1-3) ---
-      { x: 0, y: 120, w: 140, h: 260, name: "Florida Mainland" },
-      { x: 100, y: 320, w: 90, h: 110, name: "Miami Coast" },
-      { x: 130, y: 430, w: 60, h: 50, name: "Key Largo" },
-      { x: 90, y: 480, w: 90, h: 40, name: "Florida Keys" },
+    this.land = new Uint8Array(this.CW * this.CH);
+    this.buildLand();
 
-      // --- BAHAMAS ARCHIPELAGO (Cols 2-3, Rows 2-4) ---
-      { x: 380, y: 350, w: 100, h: 55, name: "Grand Bahama" },
-      { x: 500, y: 390, w: 70, h: 45, name: "Abaco" },
-      { x: 440, y: 470, w: 85, h: 70, name: "New Providence / Nassau" },
-      { x: 390, y: 530, w: 110, h: 80, name: "Andros Island" },
-      { x: 540, y: 560, w: 90, h: 45, name: "Exuma Cays" },
-      { x: 620, y: 640, w: 80, h: 50, name: "Long Island" },
-
-      // --- BERMUDA (Northeast: Cols 6-7, Rows 0-1) ---
-      { x: 1200, y: 80, w: 130, h: 65, name: "Bermuda / St. George" },
-      { x: 1180, y: 145, w: 95, h: 60, name: "Hamilton Island" },
-      { x: 1275, y: 145, w: 60, h: 45, name: "Castle Harbour" },
-
-      // --- CUBA (South: Cols 1-5, Row 5) ---
-      { x: 220, y: 890, w: 560, h: 140, name: "Cuba" },
-      { x: 450, y: 840, w: 180, h: 50, name: "Cayo Coco" },
-
-      // --- PUERTO RICO & VIRGIN ISL. (Southeast: Cols 5-7, Rows 4-5) ---
-      { x: 1010, y: 880, w: 230, h: 80, name: "Puerto Rico" },
-      { x: 1240, y: 890, w: 90, h: 60, name: "Virgin Islands" }
+    // Portos (px do mundo). Pernas: Miami -> Bermuda -> San Juan -> Miami
+    this.ports = [
+      null,
+      { name: 'MIAMI',    x: 21 * 8 + 4,  y: 52 * 8 + 4 },
+      { name: 'BERMUDA',  x: 137 * 8 + 4, y: 15 * 8 + 4 },
+      { name: 'SAN JUAN', x: 101 * 8 + 4, y: 76 * 8 + 4 }
+    ];
+    this.legs = [
+      null,
+      { from: 1, to: 2 },
+      { from: 2, to: 3 },
+      { from: 3, to: 1 }
     ];
 
-    // Dangerous coral reefs (clusters of brown rocks)
-    this.reefs = [
-      { x: 280, y: 260, r: 16 },
-      { x: 340, y: 440, r: 20 },
-      { x: 630, y: 330, r: 18 },
-      { x: 820, y: 240, r: 22 },
-      { x: 1080, y: 190, r: 20 },
-      { x: 1120, y: 340, r: 24 },
-      { x: 910, y: 580, r: 25 },
-      { x: 740, y: 760, r: 22 },
-      { x: 950, y: 810, r: 18 }
-    ];
+    this.castaways = [];
+    this.mists = [];
+    this.vortices = [];
+    this.speedboats = [];
+    this.storm = { y: 300, dir: 1 };
+  }
 
-    // Destination Ports for the 3 Legs
-    this.ports = {
-      1: {
-        leg: 1,
-        name: "PORT OF HAMILTON (BERMUDA)",
-        x: 1220, y: 155, w: 40, h: 35,
-        targetSecX: 6, targetSecY: 0
-      },
-      2: {
-        leg: 2,
-        name: "PORT OF SAN JUAN (PUERTO RICO)",
-        x: 1040, y: 885, w: 40, h: 35,
-        targetSecX: 5, targetSecY: 4
-      },
-      3: {
-        leg: 3,
-        name: "PORT OF MIAMI (FLORIDA)",
-        x: 170, y: 360, w: 40, h: 35,
-        targetSecX: 0, targetSecY: 1
+  // ------------------------------------------------------------ terra
+  buildLand() {
+    const polys = [
+      // costa leste dos EUA + Florida
+      [[0,0],[6,0],[7,9],[6,20],[9,30],[13,38],[16,48],[18,58],[15,61],[11,52],[8,44],[0,44]],
+      // Cuba
+      [[0,70],[10,64],[26,66],[44,72],[60,78],[58,82],[40,80],[20,76],[0,80]],
+      // Hispaniola
+      [[62,78],[74,76],[82,80],[76,86],[64,84]],
+      // Porto Rico
+      [[96,80],[106,79],[106,83],[96,83]],
+      // Bermuda
+      [[132,8],[140,6],[144,8],[138,11],[132,10]]
+    ];
+    for (const p of polys) this.fillPolyCells(p);
+
+    // Bahamas e ilhotas
+    const bah = [[30,40,3,2],[36,44,2,3],[40,36,3,2],[44,52,2,3],[48,46,3,2],
+                 [52,56,2,2],[58,50,3,2],[62,60,2,3],[34,52,2,2],[26,48,2,3],
+                 [70,58,3,2],[66,66,2,2],[84,50,2,2],[90,60,3,2],[110,40,2,2]];
+    for (const [x, y, w, h] of bah) {
+      for (let j = 0; j < h; j++) for (let i = 0; i < w; i++) this.setLand(x + i, y + j);
+    }
+  }
+
+  setLand(cx, cy) {
+    if (cx >= 0 && cy >= 0 && cx < this.CW && cy < this.CH) this.land[cy * this.CW + cx] = 1;
+  }
+
+  fillPolyCells(pts) {
+    for (let cy = 0; cy < this.CH; cy++) {
+      const y = cy + 0.5;
+      const xs = [];
+      for (let i = 0; i < pts.length; i++) {
+        const a = pts[i], b = pts[(i + 1) % pts.length];
+        if ((a[1] <= y && b[1] > y) || (b[1] <= y && a[1] > y)) {
+          xs.push(a[0] + (y - a[1]) / (b[1] - a[1]) * (b[0] - a[0]));
+        }
       }
+      xs.sort((p, q) => p - q);
+      for (let k = 0; k + 1 < xs.length; k += 2) {
+        for (let cx = Math.ceil(xs[k] - 0.5); cx < xs[k + 1] - 0.5; cx++) this.setLand(cx, cy);
+      }
+    }
+  }
+
+  isLandCell(cx, cy) {
+    if (cx < 0 || cy < 0 || cx >= this.CW || cy >= this.CH) return true;
+    return this.land[cy * this.CW + cx] === 1;
+  }
+
+  isWallCell(cx, cy) {
+    return cx <= 0 || cy <= 0 || cx >= this.CW - 1 || cy >= this.CH - 1;
+  }
+
+  /** Ponto (px) dentro de terra ou da parede de caveiras? */
+  blocked(x, y) {
+    const cx = Math.floor(x / this.CELL), cy = Math.floor(y / this.CELL);
+    return this.isWallCell(cx, cy) || this.isLandCell(cx, cy);
+  }
+
+  /** Raio r em volta do ponto livre? */
+  clear(x, y, r) {
+    return !(this.blocked(x - r, y - r) || this.blocked(x + r, y - r) ||
+             this.blocked(x - r, y + r) || this.blocked(x + r, y + r));
+  }
+
+  // ------------------------------------------------------------ perna
+  setupLeg(legNum) {
+    const leg = this.legs[legNum];
+    this.startPort = this.ports[leg.from];
+    this.endPort = this.ports[leg.to];
+
+    let seed = legNum * 7919 + 17;
+    const rnd = () => {
+      seed |= 0; seed = (seed + 0x6D2B79F5) | 0;
+      let t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
+      t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+    this.rnd = rnd;
+
+    const freeSpot = (minFromStart = 0) => {
+      for (let n = 0; n < 400; n++) {
+        const x = 24 + rnd() * (this.W - 48), y = 24 + rnd() * (this.H - 48);
+        if (!this.clear(x, y, 14)) continue;
+        if (Math.hypot(x - this.startPort.x, y - this.startPort.y) < minFromStart) continue;
+        return { x, y };
+      }
+      return { x: this.startPort.x + 60, y: this.startPort.y };
     };
 
-    this.swimmers = [];
-    this.hazards = [];
-    this.setupLeg(1);
+    this.castaways = [];
+    for (let i = 0; i < 7; i++) this.castaways.push({ ...freeSpot(140), got: false });
+
+    this.mists = [];
+    for (let i = 0; i < 6; i++) {
+      const p = freeSpot(160);
+      const a = rnd() * Math.PI * 2;
+      this.mists.push({ x: p.x, y: p.y, vx: Math.cos(a) * 3, vy: Math.sin(a) * 3, r: 12 });
+    }
+
+    this.vortices = [];
+    for (let i = 0; i < 5; i++) { const p = freeSpot(160); this.vortices.push({ x: p.x, y: p.y, r: 22 }); }
+
+    this.speedboats = [];
+    for (let i = 0; i < 4; i++) {
+      const p = freeSpot(200);
+      const dir = rnd() < 0.5 ? -1 : 1;
+      this.speedboats.push({ x: p.x, y: p.y, vx: dir * (14 + rnd() * 6), vy: (rnd() - 0.5) * 6 });
+    }
+
+    this.storm = { y: 120 + rnd() * 450, dir: rnd() < 0.5 ? -1 : 1 };
   }
 
-  setupLeg(legNum) {
-    this.swimmers = [];
-    this.hazards = [];
-
-    if (legNum === 1) {
-      // LEG 1: Miami -> Bermuda (Heading Northeast against trade wind)
-      this.swimmers = [
-        { id: 1, x: 330, y: 290, rescued: false, name: "Castaway from S/V 'Sea Star'" },
-        { id: 2, x: 610, y: 240, rescued: false, name: "Drifting Bahamian fisherman" },
-        { id: 3, x: 890, y: 190, rescued: false, name: "Life raft from cargo ship" },
-        { id: 4, x: 1110, y: 170, rescued: false, name: "Stranded yacht crew" }
-      ];
-
-      this.hazards = [
-        { type: 'shark', x: 460, y: 270, vx: 12, vy: 6 },
-        { type: 'shark', x: 780, y: 210, vx: -10, vy: 8 },
-        { type: 'speedboat', x: 380, y: 190, vx: 45, vy: 0 },
-        { type: 'speedboat', x: 960, y: 260, vx: -40, vy: 8 }
-      ];
-    } else if (legNum === 2) {
-      // LEG 2: Bermuda -> Puerto Rico (Across Sargasso Sea)
-      this.swimmers = [
-        { id: 1, x: 1190, y: 320, rescued: false, name: "Survivor of USS Cyclops (1918?!)" },
-        { id: 2, x: 1130, y: 490, rescued: false, name: "Muttered about 'Lights in the Deep'" },
-        { id: 3, x: 1050, y: 640, rescued: false, name: "Sailor in 1950s life jacket" },
-        { id: 4, x: 1140, y: 780, rescued: false, name: "Life raft near Puerto Rico Trench" }
-      ];
-
-      this.hazards = [
-        { type: 'whirlwind', x: 1120, y: 420, r: 28, rot: 0 },
-        { type: 'whirlwind', x: 1060, y: 690, r: 28, rot: 0 },
-        { type: 'shark', x: 1180, y: 550, vx: 14, vy: -10 },
-        { type: 'shark', x: 1090, y: 740, vx: -12, vy: 12 }
-      ];
-    } else {
-      // LEG 3: Puerto Rico -> Miami (Directly through the heart of the Triangle)
-      this.swimmers = [
-        { id: 1, x: 920, y: 790, rescued: false, name: "Flight 19 pilot helmet recovered" },
-        { id: 2, x: 740, y: 660, rescued: false, name: "Marine Sulphur Queen survivor" },
-        { id: 3, x: 570, y: 540, rescued: false, name: "Magnetic anomaly research scientist" },
-        { id: 4, x: 360, y: 450, rescued: false, name: "Castaway near Bimini" },
-        { id: 5, x: 230, y: 390, rescued: false, name: "Drifting raft off Key Biscayne" }
-      ];
-
-      this.hazards = [
-        { type: 'anomaly', x: 680, y: 620, r: 35, rot: 0 },
-        { type: 'anomaly', x: 510, y: 510, r: 30, rot: 0 },
-        { type: 'whirlwind', x: 790, y: 710, r: 28, rot: 0 },
-        { type: 'whirlwind', x: 390, y: 480, r: 28, rot: 0 },
-        { type: 'shark', x: 620, y: 580, vx: 15, vy: -8 }
-      ];
+  update(dt) {
+    for (const m of this.mists) {
+      m.x += m.vx * dt; m.y += m.vy * dt;
+      if (!this.clear(m.x, m.y, 8)) { m.vx = -m.vx; m.vy = -m.vy; m.x += m.vx * dt * 2; m.y += m.vy * dt * 2; }
     }
-  }
-
-  updateHazards(dt) {
-    for (const h of this.hazards) {
-      if (h.type === 'shark') {
-        h.x += h.vx * dt;
-        h.y += h.vy * dt;
-        // Turn around on edges
-        if (h.x < 50 || h.x > this.width - 50) h.vx *= -1;
-        if (h.y < 50 || h.y > this.height - 50) h.vy *= -1;
-      } else if (h.type === 'speedboat') {
-        h.x += h.vx * dt;
-        h.y += h.vy * dt;
-        if (h.x < 100) { h.x = 100; h.vx = Math.abs(h.vx); }
-        if (h.x > this.width - 100) { h.x = this.width - 100; h.vx = -Math.abs(h.vx); }
-      } else if (h.type === 'whirlwind' || h.type === 'anomaly') {
-        h.rot = (h.rot + dt * 3) % (Math.PI * 2);
-      }
+    for (const s of this.speedboats) {
+      const nx = s.x + s.vx * dt, ny = s.y + s.vy * dt;
+      if (this.clear(nx, ny, 5)) { s.x = nx; s.y = ny; }
+      else { s.vx = -s.vx; s.vy = (this.rnd() - 0.5) * 8; }
     }
-  }
-
-  checkLandCollision(wx, wy) {
-    for (const island of this.islands) {
-      if (wx >= island.x && wx <= island.x + island.w &&
-          wy >= island.y && wy <= island.y + island.h) {
-        return true;
-      }
-    }
-    return false;
-  }
-
-  checkReefCollision(wx, wy) {
-    for (const reef of this.reefs) {
-      const dx = wx - reef.x;
-      const dy = wy - reef.y;
-      if (dx * dx + dy * dy < reef.r * reef.r) {
-        return true;
-      }
-    }
-    return false;
+    this.storm.y += this.storm.dir * 5 * dt;
+    if (this.storm.y < 40 || this.storm.y > this.H - 40) this.storm.dir = -this.storm.dir;
   }
 }
 

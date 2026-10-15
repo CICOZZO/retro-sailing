@@ -1,55 +1,54 @@
-# ⛵ SAILING (1983 & 1986) - Edição Retrô
+# ⛵ SAILING — Edição Retrô
 
-Recriação fiel e aprimorada do clássico jogo de computador **"Sailing... An Adventure in the Bermuda Triangle" (1983 - Dynetron Company)** e do simulador náutico **Sailing (1986 3D Wireframe)** para PC.
+Recriação em navegador do jogo **"Sailing… an adventure in the Bermuda Triangle"** (Wind Productions, © 1982, PC/CGA) e de um simulador náutico 3D em aramado (1986).
 
-Jogue diretamente no seu navegador (Desktop, Tablet ou Celular):  
 🔗 **[JOGAR ONLINE (GitHub Pages)](https://cicozzo.github.io/retro-sailing/)**
 
 ---
 
-## 🎮 As Duas Versões Disponíveis
+## Versão 1 — Wind Productions (1982), CGA 320×200
 
-### Versão 1: Dynetron Company (1983) - Original das Telas de Tubo CGA
-* **Layout autêntico em 3 Quadrantes**:
-  * **Quadrante Esquerdo**: Mapa do Triângulo das Bermudas em tempo real, litorais em blocos verdes CGA pixelados, recifes, náufragos e perigos (lanchas, tubarões, névoas rastejantes, redemoinhos dimensionais e entidades extraterrestres).
-  * **Quadrante Superior Direito**: Painel de comando em close com o casco do barco, leme articulado, retranca da vela com efeito de *flutter* (quando em ferro) e setas com chevrons de vento em tempo real.
-  * **Quadrante Inferior Direito**: Radar tático global, medidor de dano do casco (`D - F`), relógio digital e placar de sobreviventes.
-* **Física Realista de Vela**:
-  * Vento alísio dinâmico com ângulo de través, alheta, bolina e popa rasa.
-  * Marolas e rajadas de vento visíveis deslizando sobre o mar negro.
-  * Esteira de espuma branca traçada na popa da embarcação.
-* **Áudio Retrô PC Speaker**:
-  * Síntese de frequências de onda quadrada e brisa marinha gerada com Web Audio API.
+Reescrita para reproduzir o jogo original conforme o vídeo de referência (https://youtu.be/zO7vTsZEvuY).
 
-### Versão 2: Simulador 3D Wireframe (1986)
-* Perspectiva tridimensional em aramado vetorial clássico da proa cortando as ondas.
-* Modos de fósforo verde, âmbar e CGA colorido com efeitos de curvatura CRT e linhas de varredura (*scanlines*).
-* Alternância de tela cheia ou tela dividida com painel de instrumentos.
+**Tela (paleta CGA 0: preto, verde, vermelho, marrom):**
+* **Esquerda:** o mar em escala próxima, um setor por vez (a tela troca ao cruzar a borda). Ilhas em verde, parede de caveiras na borda do mundo.
+* **Direita, em cima:** o barco visto de cima, girando com o rumo — casco vermelho, retranca marrom, leme verde.
+* **Faixa abaixo:** medidor de velocidade.
+* **Direita, embaixo:** radar com o mapa das Bermudas (você, náufragos e o fim da perna).
+* **Laterais do radar:** **D** dano e **F** combustível. **Rodapé:** tempo, barcos restantes e pontuação.
 
----
+**Controles (teclado numérico, ou a fileira de números):**
 
-## 📱 Controles e Como Jogar no Celular e Computador
+| Tecla | Função |
+| :--- | :--- |
+| **4 / 5 / 6** | Leme: bombordo / centro / boreste |
+| **7 / 8 / 9** | Folgar a vela 2° / 5° / 10° |
+| **1 / 2 / 3** | Caçar a vela 2° / 5° / 10° |
+| **E** | Motor liga/desliga (gasta combustível) |
+| **S** · **P** | Som · Pausa |
+| **Q** | Encerra a perna de treino, ou o jogo, salvando a pontuação |
+| **X** | Sai |
 
-| Tecla / Ação | Toque no Celular | Função |
-| :--- | :--- | :--- |
-| **B** | Toque em **[B]** ou no menu | Iniciar Campanha (3 Etapas) |
-| **P** | Toque em **[P]** | Modo Treino Livre |
-| **O / H / C / S / G** | Toque nas opções | Telas de Lore, Perigos, Controles e Medidores |
-| **ESPAÇO / ENTER** | Toque na tela | Continuar menus / Iniciar etapa |
-| **&larr; / A** | Botão `[← LEME]` | Virar para Bombordo (Esquerda) |
-| **&rarr; / D** | Botão `[LEME →]` | Virar para Boreste (Direita) |
-| **&uarr; / W** | Botão `[↑ CAÇAR VELA]` | Caçar Vela (Ajustar ângulo ao vento) |
-| **&darr; / S** | Botão `[↓ FILAR VELA]` | Filar Vela (Soltar vela) |
-| **M** | — | Silenciar / Ativar Som |
+Sem teclado numérico: **← →** leme, **↑** caça, **↓** folga. Há também botões na tela.
 
----
+**Menu:** (B) começar · (P) perna de treino · (A) todas as instruções · (O)bjetivo · (C)ontroles · (S)coring · (H)azards · (G)auges.
 
-## 🚀 Como Executar Localmente
+**Regras:** 3 pernas (Miami → Bermuda → San Juan → Miami) recolhendo náufragos e rafters e chegando ao porto. Perigos: **Creeping Mist** (volta ao início da perna, −25), **Gravitational Vortex** (teletransporta, −25), **Speed Boats** (afundam o barco, −50) e **Demonic Storm** (inverte os controles).
 
-Basta abrir o arquivo `index.html` em qualquer navegador web moderno, ou dar duplo clique em `JOGAR.bat` no Windows. Nenhuma instalação ou servidor web é necessário.
+### O que é medido do vídeo e o que é inferido
+* **Medido:** layout, cores, textos das telas de instruções, teclas, tipos de perigo e penalidades, velocidade típica (~6 px/s).
+* **Inferido (ajustável):** direção do vento (`V1_WIND_FROM` em `js/v1/v1-boat.js`), polar de velocidade, pontuação por náufrago e bônus de tempo, geografia exata do mapa e posição dos portos.
+
+## Versão 2 — Simulador 3D wireframe (1986)
+
+Perspectiva aramada com modos fósforo verde, âmbar e CGA colorido (`versao2.html`).
 
 ---
+
+## 🚀 Como executar localmente
+
+Abra `index.html` em qualquer navegador moderno, ou dê duplo clique em `JOGAR.bat`. Não precisa de instalação nem servidor.
 
 ## 🧪 Teste de fumaça
 
-`node tools/test-chrome-cdp.mjs` abre o Chrome headless, inicia a campanha, navega e confere o estado do jogo (screenshots vão para a pasta TEMP).
+`node tools/test-chrome-cdp.mjs` abre o Chrome headless, percorre título → menu → instruções → perna 1 e confere o estado do jogo (screenshots vão para a pasta TEMP).

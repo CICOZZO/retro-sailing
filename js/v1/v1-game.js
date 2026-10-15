@@ -1,14 +1,10 @@
 /**
- * SAILING (1983 - DYNETRON COMPANY)
- * State Management, 3 Historical Legs & Storytelling (Versão 1)
+ * SAILING (1982 - WIND PRODUCTIONS) - ESTADO DO JOGO, REGRAS E PONTUAÇÃO
  *
- * Implements:
- * - 3 authentic legs with realistic trade winds:
- *   Leg 1: Miami -> Bermuda (Headwind from 060°: requires authentic tacking / zig-zag!)
- *   Leg 2: Bermuda -> Puerto Rico (Crosswind from 090°: fast beam reach)
- *   Leg 3: Puerto Rico -> Miami (Tailwind from 115°: broad reach through anomalies)
- * - Sector flip transitions with PC speaker tick
- * - Swimmer rescue, collision physics, hazard interaction, score and lives tracking
+ * Estados: TITLE, MENU, INSTRUCTIONS, LEG_INTRO, PLAYING, LEG_DONE, GAMEOVER.
+ * Pontuação inferida (a tela de scoring não aparece no vídeo de referência):
+ * náufrago/rafter +100, bônus de tempo ao chegar no porto, mist/vortex -25,
+ * speed boat -50.
  */
 
 class V1Game {
@@ -16,269 +12,300 @@ class V1Game {
     this.map = new V1Map();
     this.boat = new V1Boat();
 
-    this.state = 'TITLE'; // 'TITLE', 'INSTRUCTIONS', 'LEG_INTRO', 'PLAYING', 'LEG_COMPLETE', 'GAMEOVER', 'VICTORY'
-    this.currentInstruction = 'O';
-    this.allInstructionsMode = false;
+    this.state = 'TITLE';
+    this.instrKey = 'O';
+    this.instrAll = false;
 
     this.leg = 1;
-    this.isPractice = false;
-    this.lives = 4;
+    this.practice = false;
+    this.boats = 5;
     this.score = 0;
-    this.elapsedTime = 0;
+    this.time = 0;
+    this.rescued = 0;
+    this.paused = false;
+    this.stormTimer = 0;
+    this.hitCooldown = 0;
+    this.message = '';
+    this.messageTimer = 0;
+    this.lastBonus = 0;
+    this.clock = 0;
 
-    // Wind direction (direction wind blows FROM: 0 = North, 90 = East, 180 = South, 270 = West)
-    this.windDir = 60;
-    this.windSpeed = 16;
-    this.windShiftTimer = 0;
-
-    // Sector tracking for flip-screen transitions
-    this.lastSecX = 1;
-    this.lastSecY = 2;
-
-    // Radio message banner
-    this.radioMessage = "";
-    this.radioTimer = 0;
+    // perna 1 já montada para que o menu possa desenhar o radar
+    this.map.setupLeg(1);
+    this.placeAtStart();
   }
 
-  startCampaign() {
-    this.isPractice = false;
-    this.lives = 4;
-    this.score = 0;
-    this.startLeg(1);
+  // ------------------------------------------------------------ menus
+  anyKey() {
+    if (this.state === 'TITLE') this.state = 'MENU';
+    this.beep();
   }
 
-  startPractice() {
-    this.isPractice = true;
-    this.lives = 99;
-    this.score = 0;
-    this.startLeg(1);
-  }
-
-  showInstructions(key) {
+  openInstructions(key) {
     this.state = 'INSTRUCTIONS';
-    if (key === 'A') {
-      this.allInstructionsMode = true;
-      this.currentInstruction = 'O';
-    } else {
-      this.allInstructionsMode = false;
-      this.currentInstruction = key || 'O';
-    }
-    if (window.v1Audio) window.v1Audio.beepClick();
+    this.instrAll = key === 'A';
+    this.instrKey = this.instrAll ? 'O' : key;
+    this.instrPage = 0;
+    this.beep();
   }
 
-  nextInstruction() {
-    if (this.allInstructionsMode) {
-      const order = ['O', 'C', 'S', 'H', 'G'];
-      const idx = order.indexOf(this.currentInstruction);
-      if (idx >= 0 && idx < order.length - 1) {
-        this.currentInstruction = order[idx + 1];
-        if (window.v1Audio) window.v1Audio.beepClick();
+  nextInstructionPage() {
+    const pages = V1Game.PAGES[this.instrKey];
+    if (this.instrPage + 1 < pages.length) { this.instrPage++; this.beep(); return; }
+    if (this.instrAll) {
+      const order = ['O', 'C', 'S', 'G', 'H'];
+      const i = order.indexOf(this.instrKey);
+      if (i >= 0 && i + 1 < order.length) {
+        this.instrKey = order[i + 1];
+        this.instrPage = 0;
+        this.beep();
         return;
       }
     }
-    this.state = 'TITLE';
-    this.allInstructionsMode = false;
-    if (window.v1Audio) window.v1Audio.beepClick();
+    this.state = 'MENU';
+    this.instrAll = false;
+    this.beep();
   }
 
-  startLeg(legNum) {
-    this.leg = legNum;
+  beep() { if (window.v1Audio) window.v1Audio.beepClick(); }
+
+  // ------------------------------------------------------------ partida
+  startGame(practice) {
+    this.practice = practice;
+    this.boats = 5;
+    this.score = 0;
+    this.startLeg(1);
+  }
+
+  startLeg(n) {
+    this.leg = n;
+    this.map.setupLeg(n);
+    this.time = 0;
+    this.rescued = 0;
+    this.stormTimer = 0;
+    this.paused = false;
+    this.message = '';
+    this.placeAtStart();
     this.state = 'LEG_INTRO';
-    this.elapsedTime = 0;
-    this.radioMessage = "";
-    this.map.setupLeg(legNum);
-
-    if (legNum === 1) {
-      // LEG 1: Miami (Sector 1,2) -> Bermuda (Sector 6,0)
-      // Course is ~065° NE. Wind blows from 060° (Direct Headwind!).
-      // Start close-hauled on port tack (018°), beating upwind!
-      this.boat.reset(276, 450, 18);
-      this.boat.speed = 3.6;
-      this.boat.sheetAngle = 16;
-      this.windDir = 60;
-      this.windSpeed = 17;
-    } else if (legNum === 2) {
-      // LEG 2: Bermuda (Sector 6,0) -> Puerto Rico (Sector 5,4)
-      // Course is ~170° S. Wind blows from 090° (Beam Reach!)
-      this.boat.reset(1220, 150, 170);
-      this.boat.speed = 4.2;
-      this.boat.sheetAngle = 45;
-      this.windDir = 90;
-      this.windSpeed = 19;
-    } else {
-      // LEG 3: Puerto Rico (Sector 5,4) -> Miami (Sector 0,1)
-      // Course is ~305° NW. Wind blows from 115° (Broad Reach!)
-      this.boat.reset(1030, 840, 305);
-      this.boat.speed = 4.5;
-      this.boat.sheetAngle = 60;
-      this.windDir = 115;
-      this.windSpeed = 21;
-    }
-
-    this.lastSecX = Math.floor(this.boat.x / this.map.SECTOR_W);
-    this.lastSecY = Math.floor(this.boat.y / this.map.SECTOR_H);
-
     if (window.v1Audio) window.v1Audio.legStart();
   }
 
-  beginPlaying() {
-    this.state = 'PLAYING';
-    if (window.v1Audio) window.v1Audio.resume();
+  placeAtStart() {
+    const p = this.map.startPort;
+    this.boat.reset(p.x, p.y, 0);
   }
 
+  beginSailing() {
+    this.state = 'PLAYING';
+  }
+
+  say(text) {
+    this.message = text;
+    this.messageTimer = 3;
+  }
+
+  endGame() {
+    this.state = 'GAMEOVER';
+    if (window.v1Audio) window.v1Audio.gameOver();
+  }
+
+  // ------------------------------------------------------------ comandos
+  get reversed() { return this.stormTimer > 0; }
+
+  rudderCmd(dir) {         // dir: -1 bombordo (4), +1 boreste (6)
+    if (this.state !== 'PLAYING' || this.paused) return;
+    this.boat.steer((this.reversed ? -dir : dir) * 5);
+  }
+
+  centerRudderCmd() {
+    if (this.state !== 'PLAYING' || this.paused) return;
+    this.boat.centerRudder();
+  }
+
+  sheetCmd(deg) {          // deg > 0 folga (7/8/9), deg < 0 caça (1/2/3)
+    if (this.state !== 'PLAYING' || this.paused) return;
+    this.boat.trim(deg);
+    if (window.v1Audio) window.v1Audio.sheetClick();
+  }
+
+  toggleEngine() { if (this.state === 'PLAYING') this.boat.engine = !this.boat.engine; }
+  togglePause() { if (this.state === 'PLAYING') this.paused = !this.paused; }
+  toggleSound() { if (window.v1Audio) window.v1Audio.toggleMute(); }
+
+  quit() {                 // Q
+    if (this.state === 'PLAYING' || this.state === 'LEG_INTRO') {
+      if (this.practice) this.state = 'MENU';
+      else this.endGame();
+    }
+  }
+
+  // ------------------------------------------------------------ simulação
   update(dt) {
-    if (this.state !== 'PLAYING') return;
+    this.clock += dt;
+    if (this.messageTimer > 0) this.messageTimer -= dt;
+    if (this.state !== 'PLAYING' || this.paused) return;
 
-    this.elapsedTime += dt;
+    const m = this.map, b = this.boat;
+    this.time += dt;
+    this.hitCooldown = Math.max(0, this.hitCooldown - dt);
+    this.stormTimer = Math.max(0, this.stormTimer - dt);
 
-    // Radio banner timer
-    if (this.radioTimer > 0) {
-      this.radioTimer -= dt;
-      if (this.radioTimer <= 0) this.radioMessage = "";
+    m.update(dt);
+    b.update(dt);
+
+    // movimento com colisão contra terra/parede de caveiras
+    const nx = b.x + b.vx * dt, ny = b.y + b.vy * dt;
+    if (m.clear(nx, ny, 3)) {
+      b.x = nx; b.y = ny;
+    } else {
+      b.speed *= 0.3;
+      if (this.hitCooldown === 0) {
+        this.damageBoat(4);
+        this.hitCooldown = 0.6;
+        if (window.v1Audio) window.v1Audio.crashThud();
+      }
+      // empurra um pouco para trás
+      b.x -= b.vx * dt * 2; b.y -= b.vy * dt * 2;
     }
 
-    // Gentle realistic wind oscillations (+-5°) every 18 seconds
-    this.windShiftTimer += dt;
-    if (this.windShiftTimer > 18) {
-      this.windShiftTimer = 0;
-      const shift = (Math.random() - 0.5) * 8;
-      this.windDir = (this.windDir + shift + 360) % 360;
-    }
-
-    // 1. Update boat aerodynamics & motion
-    this.boat.update(dt, this.windDir, this.windSpeed);
-
-    // 2. Check sector flip transitions
-    const curSecX = Math.floor(this.boat.x / this.map.SECTOR_W);
-    const curSecY = Math.floor(this.boat.y / this.map.SECTOR_H);
-
-    if (curSecX !== this.lastSecX || curSecY !== this.lastSecY) {
-      this.lastSecX = curSecX;
-      this.lastSecY = curSecY;
-      if (window.v1Audio && window.v1Audio.sectorFlipTick) {
-        window.v1Audio.sectorFlipTick();
+    // náufragos
+    for (const c of m.castaways) {
+      if (!c.got && Math.hypot(c.x - b.x, c.y - b.y) < 9) {
+        c.got = true;
+        this.rescued++;
+        this.score += 100;
+        this.say('SURVIVOR RESCUED +100');
+        if (window.v1Audio) window.v1Audio.rescueDing();
       }
     }
 
-    // 3. World bounds check
-    if (this.boat.x < 10) { this.boat.x = 10; this.boat.speed *= 0.5; }
-    if (this.boat.x > this.map.width - 10) { this.boat.x = this.map.width - 10; this.boat.speed *= 0.5; }
-    if (this.boat.y < 10) { this.boat.y = 10; this.boat.speed *= 0.5; }
-    if (this.boat.y > this.map.height - 10) { this.boat.y = this.map.height - 10; this.boat.speed *= 0.5; }
-
-    // 4. Update dynamic hazards
-    this.map.updateHazards(dt);
-
-    // 5. Swimmer rescue check
-    for (const s of this.map.swimmers) {
-      if (!s.rescued) {
-        const dx = s.x - this.boat.x;
-        const dy = s.y - this.boat.y;
-        if (dx * dx + dy * dy < 24 * 24) {
-          s.rescued = true;
-          this.score += 500;
-          this.radioMessage = `SOS RESCUED: ${s.name}`;
-          this.radioTimer = 4.0;
-          if (window.v1Audio) window.v1Audio.rescueDing();
-        }
+    // mist: volta ao início da perna
+    for (const mist of m.mists) {
+      if (Math.hypot(mist.x - b.x, mist.y - b.y) < mist.r) {
+        this.score -= 25;
+        this.damageBoat(10);
+        this.placeAtStart();
+        this.say('CREEPING MIST! -25');
+        if (window.v1Audio) window.v1Audio.anomalyChime();
+        break;
       }
     }
 
-    // 6. Island and reef collisions
-    if (this.map.checkLandCollision(this.boat.x, this.boat.y)) {
-      this.boat.damage = Math.min(100, this.boat.damage + 18 * dt);
-      this.boat.speed = Math.max(0, this.boat.speed - 3.5 * dt);
-      this.radioMessage = "WARNING: RUN AGROUND ON SHOAL!";
-      this.radioTimer = 1.5;
-      if (Math.random() < 0.15 && window.v1Audio) window.v1Audio.crashThud();
-    }
-
-    if (this.map.checkReefCollision(this.boat.x, this.boat.y)) {
-      this.boat.damage = Math.min(100, this.boat.damage + 28 * dt);
-      this.boat.speed = Math.max(0, this.boat.speed - 4.0 * dt);
-      this.radioMessage = "ALERT: REEF IMPACT!";
-      this.radioTimer = 1.5;
-      if (Math.random() < 0.15 && window.v1Audio) window.v1Audio.crashThud();
-    }
-
-    // 7. Hazard interactions
-    for (const haz of this.map.hazards) {
-      const dx = haz.x - this.boat.x;
-      const dy = haz.y - this.boat.y;
-      const distSq = dx * dx + dy * dy;
-
-      if (haz.type === 'shark' && distSq < 20 * 20) {
-        this.boat.damage = Math.min(100, this.boat.damage + 10);
-        this.radioMessage = "ALERT: SHARK STRIKE ON HULL!";
-        this.radioTimer = 2.5;
-        if (window.v1Audio) window.v1Audio.crashThud();
-      } else if (haz.type === 'speedboat' && distSq < 26 * 26) {
-        this.boat.damage = Math.min(100, this.boat.damage + 25);
-        this.radioMessage = "ALERT: SPEEDBOAT COLLISION!";
-        this.radioTimer = 2.5;
-        if (window.v1Audio) window.v1Audio.crashThud();
-      } else if (haz.type === 'whirlwind' && distSq < haz.r * haz.r) {
-        // Spatial displacement
-        this.boat.x = 200 + Math.random() * (this.map.width - 400);
-        this.boat.y = 200 + Math.random() * (this.map.height - 400);
-        this.radioMessage = "*** VORTEX TIME-SLIP WARP! ***";
-        this.radioTimer = 4.0;
+    // vortex: teletransporta
+    for (const v of m.vortices) {
+      if (Math.hypot(v.x - b.x, v.y - b.y) < 12) {
+        this.score -= 25;
+        this.damageBoat(10);
+        this.teleport();
+        this.say('GRAVITATIONAL VORTEX! -25');
         if (window.v1Audio) window.v1Audio.whirlwindWarp();
-      } else if (haz.type === 'anomaly' && distSq < haz.r * haz.r) {
-        this.score += 20;
-        this.radioMessage = "PSYCHIC ANOMALY PULSE DETECTED";
-        this.radioTimer = 2.0;
-        if (Math.random() < 0.08 && window.v1Audio) window.v1Audio.anomalyChime();
+        break;
       }
     }
 
-    // 8. Damage check / life loss
-    if (this.boat.damage >= 100) {
-      this.lives--;
-      if (this.lives <= 0) {
-        this.state = 'GAMEOVER';
-        if (window.v1Audio) window.v1Audio.gameOver();
-      } else {
-        this.startLeg(this.leg);
+    // speed boats: afundam o barco
+    for (const s of m.speedboats) {
+      if (Math.hypot(s.x - b.x, s.y - b.y) < 7) {
+        this.score -= 50;
+        this.sink('SPEED BOAT! -50');
+        return;
       }
+    }
+
+    // tempestade demoníaca: faixa horizontal que cruza o mundo
+    if (Math.abs(m.storm.y - b.y) < 7) {
+      if (this.stormTimer <= 0) this.say('DEMONIC STORM! CONTROLS REVERSED');
+      this.stormTimer = 5;
+    }
+    if (this.stormTimer > 0) this.damageBoat(0.8 * dt);
+
+    // porto
+    const port = m.endPort;
+    if (Math.hypot(port.x - b.x, port.y - b.y) < 10) {
+      this.completeLeg();
       return;
     }
 
-    // 9. Check destination harbour entry
-    const port = this.map.ports[this.leg];
-    if (port) {
-      const pdx = (port.x + port.w / 2) - this.boat.x;
-      const pdy = (port.y + port.h / 2) - this.boat.y;
-      if (Math.abs(pdx) < port.w && Math.abs(pdy) < port.h) {
-        const unrescued = this.map.swimmers.filter(s => !s.rescued).length;
-        if (unrescued === 0 || this.isPractice) {
-          this.completeLeg();
-        } else {
-          this.radioMessage = `${unrescued} CASTAWAY(S) REMAIN IN WATER!`;
-          this.radioTimer = 2.0;
-        }
-      }
+    if (b.damage >= 100) this.sink('BOAT DESTROYED');
+  }
+
+  damageBoat(n) {
+    this.boat.damage = Math.min(100, this.boat.damage + n);
+  }
+
+  teleport() {
+    const m = this.map, b = this.boat;
+    for (let n = 0; n < 200; n++) {
+      const x = 24 + Math.random() * (m.W - 48), y = 24 + Math.random() * (m.H - 48);
+      if (m.clear(x, y, 14) && Math.hypot(x - b.x, y - b.y) > 200) { b.x = x; b.y = y; return; }
     }
+  }
+
+  sink(text) {
+    this.boats--;
+    this.say(text);
+    if (window.v1Audio) window.v1Audio.crashThud();
+    if (this.boats <= 0) { this.endGame(); return; }
+    this.placeAtStart();
+    this.boat.damage = 0;
+    this.stormTimer = 0;
   }
 
   completeLeg() {
-    this.state = 'LEG_COMPLETE';
-    const timeBonus = Math.max(0, 300 - Math.floor(this.elapsedTime)) * 10;
-    this.score += 2000 + timeBonus;
+    this.lastBonus = Math.max(0, 600 - Math.floor(this.time)) * 2;
+    this.score += this.lastBonus;
+    this.state = 'LEG_DONE';
     if (window.v1Audio) window.v1Audio.portVictory();
-
-    if (this.leg >= 3) {
-      this.state = 'VICTORY';
-    }
   }
 
-  advanceToNextLeg() {
-    if (this.leg < 3) {
-      this.startLeg(this.leg + 1);
-    } else {
-      this.state = 'TITLE';
-    }
+  nextLeg() {
+    if (this.practice || this.leg >= 3) { this.state = 'GAMEOVER'; return; }
+    this.startLeg(this.leg + 1);
   }
 }
+
+// Texto das telas de instruções (23 colunas por linha)
+V1Game.PAGES = {
+  O: [[
+    '*MAIN OBJECTIVE*', '',
+    'Sail 3 legs of the', 'Bermuda Triangle', 'picking up all',
+    'swimmers and rafters', 'stranded in the', 'water. Then stop the',
+    'clock and collect', 'bonus by sailing', 'into port at the end', 'of the leg.'
+  ]],
+  C: [[
+    '*NUMERIC KEY PAD*', '',
+    'Rudder control:', ' 4:turn to port', '   (counter clockwise)',
+    ' 5:center rudder', ' 6:turn to starboard', '   (clockwise)', '',
+    'Sail controls:', ' 7:extend 2 deg.', ' 8:extend 5 deg.', ' 9:extend 10 deg.', '',
+    ' 1:pull in 2 deg.', ' 2:pull in 5 deg.', ' 3:pull in 10 deg.'
+  ], [
+    '*ALPHABETIC KEYS*', '',
+    ' E - engine on/off', ' S - sound on/off', ' P - pause on/off',
+    ' Q - end practice leg', '     or end game and', '     save score', '',
+    ' X - exit to system'
+  ]],
+  S: [[
+    '*SCORING*', '',
+    'Each swimmer or', 'rafter rescued:', '   100 points', '',
+    'Time bonus for', 'reaching port.', '',
+    'Penalties:', ' Creeping mist  -25', ' Vortex         -25', ' Speed boat     -50'
+  ]],
+  G: [[
+    '*GAUGES*', '',
+    'RADAR SCREEN:', ' lower right corner', ' -your position', ' -swimmer/rafter', ' -end of leg', '',
+    'FUEL GAUGE:', ' right of radar', 'DAMAGE GAUGE:', ' left of radar', 'BOAT SPEED:', ' above radar'
+  ], [
+    '*GAUGES*', '',
+    'BELOW RADAR FROM', 'RIGHT TO LEFT:', '',
+    '* LEG TIME', '* BOATS REMAINING', '* SCORE', '',
+    'WIND DIRECTION:', ' always south to', ' north'
+  ]],
+  H: [
+    ['*HAZARDS*', '', 'CREEPING MIST:', '', '', '', '', 'Drags you back to', 'the beginning of', 'the leg and damages', 'your boat.', '25 point penalty.'],
+    ['*HAZARDS*', '', 'GRAVITATIONAL VORTEX:', '', '', '', '', 'Transports you to', 'some other part of', 'the world and adds', 'damage to your boat.', '25 point penalty'],
+    ['*HAZARDS*', '', 'SPEED BOATS:', '', '', '', '', 'Will sink your boat', 'if one comes in', 'contact with hull.', '', '50 point penalty.'],
+    ['*HAZARDS*', '', 'DEMONIC STORM:', '', 'Cause confusion and', 'disorientation.', 'Controls work in', 'reverse.', 'Causes minor damage', 'to your boat as long', 'as you remain in', 'storm.']
+  ]
+};
 
 if (typeof window !== 'undefined') window.V1Game = V1Game;

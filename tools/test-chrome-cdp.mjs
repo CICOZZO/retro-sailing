@@ -142,88 +142,53 @@ async function runTest() {
   fs.writeFileSync(titleShotPath, Buffer.from(titleShot.data, 'base64'));
   console.log('Screenshot da tela de título salvo em', titleShotPath);
 
-  // 2. Simula clique na tela sobre o menu ou tecla 'B'
-  const clickOnB = await sendCmd('Runtime.evaluate', {
-    expression: `(() => {
-      window.dispatchEvent(new KeyboardEvent('keydown', { code: 'KeyB', key: 'B' }));
-      return 'Tecla [B] disparada com sucesso';
-    })()`,
-    returnByValue: true
-  });
-  console.log(clickOnB.result?.value);
+  // 2. Fluxo: título -> menu -> instruções -> perna -> navegando
+  const evalJs = async (expr) => (await sendCmd('Runtime.evaluate', { expression: expr, returnByValue: true })).result?.value;
+  const key = (k) => evalJs(`window.dispatchEvent(new KeyboardEvent('keydown', { key: ${JSON.stringify(k)} }))`);
+  const wait = (ms) => new Promise(r => setTimeout(r, ms));
+  const shot = async (name) => {
+    const s = await sendCmd('Page.captureScreenshot', { format: 'png' });
+    const p = path.join(process.env.TEMP || '.', name);
+    fs.writeFileSync(p, Buffer.from(s.data, 'base64'));
+    console.log('Screenshot salvo em:', p);
+  };
 
-  await new Promise(r => setTimeout(r, 400));
+  await key(' '); await wait(200);
+  console.log('Após tecla no título:', await evalJs('window.v1Game.state'));
+  await shot('chrome-menu.png');
 
-  // 3. Simula tecla para avançar de LEG_INTRO para PLAYING
-  const clickToPlay = await sendCmd('Runtime.evaluate', {
-    expression: `(() => {
-      window.dispatchEvent(new KeyboardEvent('keydown', { code: 'Space', key: ' ' }));
-      return 'Espaço para iniciar jogabilidade disparado';
-    })()`,
-    returnByValue: true
-  });
-  console.log(clickToPlay.result?.value);
+  await key('H'); await wait(200);
+  console.log('Instruções:', await evalJs('window.v1Game.state + "/" + window.v1Game.instrKey'));
+  await key(' '); await key(' '); await key(' '); await wait(200);   // até o storm
+  await shot('chrome-hazard.png');
+  await key(' '); await wait(200);
+  console.log('De volta ao menu:', await evalJs('window.v1Game.state'));
 
-  // Aguarda 1.0s de navegação ativa
-  await new Promise(r => setTimeout(r, 1000));
+  await key('B'); await wait(200);
+  console.log('Perna 1:', await evalJs('window.v1Game.state'));
+  await key(' '); await wait(300);
+  console.log('Navegando:', await evalJs('window.v1Game.state'));
 
-  // Ativa o HUD de Telemetria com a tecla 'T'
-  await sendCmd('Runtime.evaluate', {
-    expression: `(() => {
-      window.dispatchEvent(new KeyboardEvent('keydown', { code: 'KeyT', key: 'T' }));
-    })()`
-  });
+  // solta a vela e vira o leme; deixa o barco andar
+  await key('9'); await key('9'); await key('9');
+  await key('6'); await key('6');
+  await wait(4000);
+  await key('5');
+  await wait(1500);
 
-  // Vira o leme para bombordo (ArrowLeft) para orçar fora de ferro em direção a 015°
-  await sendCmd('Runtime.evaluate', {
-    expression: `(() => {
-      window.dispatchEvent(new KeyboardEvent('keydown', { code: 'ArrowLeft', key: 'ArrowLeft' }));
-    })()`
-  });
-
-  await new Promise(r => setTimeout(r, 600));
-
-  // Solta a tecla do leme (volta a neutro) e navega por 1.5s
-  await sendCmd('Runtime.evaluate', {
-    expression: `(() => {
-      window.dispatchEvent(new KeyboardEvent('keyup', { code: 'ArrowLeft', key: 'ArrowLeft' }));
-    })()`
-  });
-
-  await new Promise(r => setTimeout(r, 1500));
-
-  // Verifica estado do veleiro e pixels no buffer CGA
   const boatStatus = await sendCmd('Runtime.evaluate', {
     expression: `(() => {
-      const cga = window.v1Renderer?.cga;
-      const buf = cga?.buf;
-      let redPixels = 0, greenPixels = 0, brownPixels = 0;
-      if (buf) {
-        for (let y = 8; y < 190; y++) {
-          for (let x = 8; x < 192; x++) {
-            const c = buf[y * 320 + x];
-            if (c === 2) redPixels++;
-            else if (c === 1) greenPixels++;
-            else if (c === 3) brownPixels++;
-          }
-        }
+      const g = window.v1Game, b = g.boat, buf = window.v1Renderer.cga.buf;
+      let red = 0, green = 0, brown = 0;
+      for (let y = 8; y < 192; y++) for (let x = 8; x < 192; x++) {
+        const c = buf[y * 320 + x];
+        if (c === 2) red++; else if (c === 1) green++; else if (c === 3) brown++;
       }
-
       return {
-        state: window.v1Game?.state,
-        boatSpeed: window.v1Game?.boat?.speed?.toFixed(2),
-        boatHeading: window.v1Game?.boat?.heading?.toFixed(1),
-        apparentWindAngle: window.v1Game?.boat?.apparentWindAngle?.toFixed(1),
-        pointOfSail: window.v1Game?.boat?.pointOfSail,
-        sheetAngle: window.v1Game?.boat?.sheetAngle?.toFixed(1),
-        boomAngle: window.v1Game?.boat?.boomAngle?.toFixed(1),
-        boatX: window.v1Game?.boat?.x?.toFixed(1),
-        boatY: window.v1Game?.boat?.y?.toFixed(1),
-        telemetryActive: window.v1Renderer?.showTelemetry,
-        sectorMapRedPixels: redPixels,
-        sectorMapGreenPixels: greenPixels,
-        sectorMapBrownPixels: brownPixels,
-        score: window.v1Game?.score
+        state: g.state, heading: +b.heading.toFixed(1), speed: +b.speed.toFixed(2),
+        sheet: b.sheet, rudder: b.rudder, side: b.side, boomAngle: +b.boomAngle.toFixed(1),
+        x: +b.x.toFixed(1), y: +b.y.toFixed(1), damage: b.damage, boats: g.boats, score: g.score,
+        seaRed: red, seaGreen: green, seaBrown: brown
       };
     })()`,
     returnByValue: true

@@ -1,664 +1,399 @@
 /**
- * SAILING (1983 - DYNETRON COMPANY)
- * Authentic CGA 320x200 Mode 4 Raster Renderer (Versão 1)
+ * SAILING (1982 - WIND PRODUCTIONS) - RENDERIZADOR CGA 320x200 (PALETA 0)
  *
- * Direct framebuffer rasterization locked to CGA Palette 0:
- * 0 = Black (#000000)
- * 1 = Green (#00aa00)
- * 2 = Red   (#aa0000)
- * 3 = Brown (#aa5500)
+ * Layout (medido no vídeo de referência):
+ *   mar          x 8..191   y 8..191     (184 x 184, um setor do mundo)
+ *   barco/leme   x 200..311 y 8..119     (visto de cima, gira com o rumo)
+ *   velocidade   x 200..311 y 121..126
+ *   radar/mapa   x 200..311 y 128..191   (112 x 64)
+ *   D (dano)     x 194..196,  F (combustível) x 313..315
+ *   rodapé       y 192..199  (tempo, barcos, pontuação)
+ * Cores: 0 preto, 1 verde, 2 vermelho, 3 marrom.
  */
+
+const V1_SKULL = [0x3C, 0x7E, 0xDB, 0xFF, 0xE7, 0x7E, 0x5A, 0x00];
+const V1_SAIL_SPRITE = [
+  '...B....',
+  '...BG...',
+  '...BGG..',
+  '...BGGG.',
+  '...B....',
+  '.RRRRRR.'
+];
+const V1_CASTAWAY_SPRITE = ['.BBBB.', 'BRBBRB', 'BBRRBB', 'BRBBRB', '.BBBB.'];
+const V1_SPEEDBOAT_SPRITE = ['...RR...', '.GGGGGGG.', '..GGGGG..'];
+const V1_HULL = [0, 3, 6, 8.5, 10, 11, 11, 10.5, 9.5, 8, 6, 4, 2];
 
 class V1Renderer {
   constructor(canvas) {
-    this.canvas = canvas;
     this.cga = new V1CGA(canvas);
-
-    this.blinkTimer = 0;
-    this.blinkOn = true;
-    this.showTelemetry = false; // Toggle with 'T'
-    this.hoveredMenuOption = null;
   }
 
-  toggleTelemetry() {
-    this.showTelemetry = !this.showTelemetry;
-    return this.showTelemetry;
-  }
-
-  render(game, dt = 0.016) {
-    this.blinkTimer += dt;
-    if (this.blinkTimer > 0.35) {
-      this.blinkTimer = 0;
-      this.blinkOn = !this.blinkOn;
-    }
-
+  // ------------------------------------------------------------ helpers
+  sprite(rows, cx, cy, flip = false) {
     const cga = this.cga;
-    cga.clear(0);
-
-    // 1. Draw outer CRT bezel and dividing frames (Brown = 3)
-    this.renderBezelLayout(cga, game);
-
-    // 2. Render Top-Right Quadrant: Wind-relative boat close-up (x: 200, y: 8, w: 112, h: 102)
-    this.renderBoatCloseUp(cga, 200, 8, 112, 102, game);
-
-    // 3. Render Center-Right: Tiller / Rudder gauge (x: 200, y: 112, w: 112, h: 14)
-    this.renderTillerGauge(cga, 200, 112, 112, 14, game);
-
-    // 4. Render Bottom-Right: Tactical radar & instruments (x: 200, y: 128, w: 112, h: 62)
-    this.renderRadarAndInstruments(cga, 200, 128, 112, 62, game);
-
-    // 5. Render Left Quadrant: Sector Map or Title / Instructions (x: 8, y: 8, w: 184, h: 182)
-    if (game.state === 'TITLE') {
-      this.renderTitleScreen(cga, 8, 8, 184, 182, game);
-    } else if (game.state === 'INSTRUCTIONS') {
-      this.renderInstructions(cga, 8, 8, 184, 182, game);
-    } else if (game.state === 'LEG_INTRO') {
-      this.renderMainMapView(cga, 8, 8, 184, 182, game);
-      this.renderModal(cga, 8, 8, 184, 182, [
-        `LEG ${game.leg} OF 3`,
-        "",
-        game.map.ports[game.leg].name,
-        "",
-        "RESCUE CASTAWAYS &",
-        "NAVIGATE TO PORT",
-        "",
-        "[PRESS ANY KEY / CLICK]"
-      ], 3);
-    } else if (game.state === 'PLAYING') {
-      this.renderMainMapView(cga, 8, 8, 184, 182, game);
-      if (this.showTelemetry) {
-        this.renderTelemetryHUD(cga, 10, 10, game);
+    const h = rows.length, w = rows[0].length;
+    const ox = Math.round(cx - w / 2), oy = Math.round(cy - h / 2);
+    for (let y = 0; y < h; y++) {
+      for (let x = 0; x < w; x++) {
+        const ch = rows[y][flip ? w - 1 - x : x];
+        if (ch === 'G') cga.pset(ox + x, oy + y, 1);
+        else if (ch === 'R') cga.pset(ox + x, oy + y, 2);
+        else if (ch === 'B') cga.pset(ox + x, oy + y, 3);
       }
-    } else if (game.state === 'LEG_COMPLETE') {
-      this.renderMainMapView(cga, 8, 8, 184, 182, game);
-      this.renderModal(cga, 8, 8, 184, 182, [
-        "HARBOUR REACHED!",
-        "",
-        `LEG ${game.leg} COMPLETE`,
-        `TIME BONUS: +${Math.max(0, 300 - Math.floor(game.elapsedTime)) * 10}`,
-        "",
-        "[SPACE / CLICK NEXT LEG]"
-      ], 1);
-    } else if (game.state === 'VICTORY') {
-      this.renderMainMapView(cga, 8, 8, 184, 182, game);
-      this.renderModal(cga, 8, 8, 184, 182, [
-        "*** VICTORY! ***",
-        "",
-        "TRIANGLE CONQUERED!",
-        `FINAL SCORE: ${game.score}`,
-        "",
-        "YOU ARE A MASTER SAILOR",
-        "",
-        "[SPACE / CLICK TITLE]"
-      ], 1);
-    } else if (game.state === 'GAMEOVER') {
-      this.renderMainMapView(cga, 8, 8, 184, 182, game);
-      this.renderModal(cga, 8, 8, 184, 182, [
-        "* SHIPWRECKED *",
-        "",
-        "YOUR BOAT WAS LOST",
-        "IN THE BERMUDA TRIANGLE",
-        `FINAL SCORE: ${game.score}`,
-        "",
-        "[SPACE / CLICK TITLE]"
-      ], 2);
+    }
+  }
+
+  fillPoly(pts, c) {
+    const cga = this.cga;
+    let y0 = Infinity, y1 = -Infinity;
+    for (const p of pts) { y0 = Math.min(y0, p[1]); y1 = Math.max(y1, p[1]); }
+    for (let y = Math.floor(y0); y <= Math.ceil(y1); y++) {
+      const yy = y + 0.5, xs = [];
+      for (let i = 0; i < pts.length; i++) {
+        const a = pts[i], b = pts[(i + 1) % pts.length];
+        if ((a[1] <= yy && b[1] > yy) || (b[1] <= yy && a[1] > yy)) {
+          xs.push(a[0] + (yy - a[1]) / (b[1] - a[1]) * (b[0] - a[0]));
+        }
+      }
+      xs.sort((p, q) => p - q);
+      for (let k = 0; k + 1 < xs.length; k += 2) {
+        for (let x = Math.round(xs[k]); x < Math.round(xs[k + 1]); x++) cga.pset(x, y, c);
+      }
+    }
+  }
+
+  bigText(str, x, y, scale, c) {
+    const cga = this.cga;
+    str = String(str).toUpperCase();
+    for (let i = 0; i < str.length; i++) {
+      const g = cga.glyphs[str.charCodeAt(i)];
+      if (!g) continue;
+      for (let gy = 0; gy < 8; gy++) for (let gx = 0; gx < 8; gx++) {
+        if (g[gy * 8 + gx]) cga.fill(x + (i * 8 + gx) * scale, y + gy * scale, scale, scale, c);
+      }
+    }
+  }
+
+  skull(x, y) {
+    const cga = this.cga;
+    for (let gy = 0; gy < 8; gy++) for (let gx = 0; gx < 8; gx++) {
+      if ((V1_SKULL[gy] >> (7 - gx)) & 1) cga.pset(x + gx, y + gy, 3);
+    }
+  }
+
+  mmss(t) {
+    t = Math.max(0, Math.floor(t));
+    const m = Math.floor(t / 60), s = t % 60;
+    return String(m).padStart(2, '0') + ':' + String(s).padStart(2, '0');
+  }
+
+  // ------------------------------------------------------------ frame
+  render(game) {
+    const cga = this.cga;
+    cga.resetClip();
+
+    if (game.state === 'TITLE') {
+      this.renderTitle(game);
+      cga.present();
+      return;
     }
 
-    // 6. Bottom Bezel status line (y: 192)
-    this.renderBottomStatus(cga, game);
+    cga.clear(3);
+    cga.fill(8, 8, 184, 184, 0);       // mar
+    cga.fill(200, 8, 112, 112, 0);     // barco
+    cga.fill(200, 128, 112, 64, 0);    // radar
 
-    // Present indexed buffer to canvas
+    this.renderCloseUp(game);
+    this.renderSpeed(game);
+    this.renderRadar(game);
+    this.renderGauges(game);
+    this.renderFooter(game);
+
+    switch (game.state) {
+      case 'MENU': this.renderMenu(); break;
+      case 'INSTRUCTIONS': this.renderInstructions(game); break;
+      case 'LEG_INTRO': this.renderLegIntro(game); break;
+      case 'PLAYING': this.renderSea(game); break;
+      case 'LEG_DONE': this.renderLegDone(game); break;
+      case 'GAMEOVER': this.renderGameOver(game); break;
+    }
     cga.present();
   }
 
-  // ------------------------------------------------------------- BEZEL LAYOUT
-  renderBezelLayout(cga, game) {
-    // Outer border (Brown = 3)
-    cga.rect(0, 0, 320, 200, 3);
-    cga.rect(1, 1, 318, 198, 3);
+  // ------------------------------------------------------------ título
+  renderTitle(game) {
+    const cga = this.cga;
+    cga.clear(0);
+    cga.rect(0, 0, 320, 200, 1);
+    cga.rect(1, 1, 318, 198, 1);
+    cga.text('Wind Productions', 16, 8, 3);
+    cga.text('(C)opyright 1982', 192, 8, 3);
+    cga.text('presents', 24, 16, 3);
 
-    // Left Quadrant frame (x: 6, y: 6, w: 188, h: 185)
-    cga.rect(6, 6, 188, 185, 3);
+    this.bigText('Sailing', 74, 42, 5, 1);
+    this.bigText('Sailing', 72, 40, 5, 2);
 
-    // Top-Right Quadrant frame (x: 198, y: 6, w: 116, h: 105)
-    cga.rect(198, 6, 116, 105, 3);
+    cga.text('...an adventure in the', 72, 108, 3);
+    cga.text('Bermuda Triangle', 96, 120, 3);
+    cga.text('by', 152, 140, 3);
+    cga.text('Blackbeard....', 104, 152, 3);
 
-    // Red arrows along top bezel of boat close-up (Authentic Dynetron detail!)
-    for (let x = 208; x <= 304; x += 16) {
-      cga.line(x, 4, x, 7, 2);
-      cga.pset(x - 1, 5, 2);
-      cga.pset(x + 1, 5, 2);
-    }
-
-    // Tiller bar frame (x: 198, y: 111, w: 116, h: 16)
-    cga.rect(198, 111, 116, 16, 3);
-
-    // Bottom-Right Quadrant frame (x: 198, y: 127, w: 116, h: 64)
-    cga.rect(198, 127, 116, 64, 3);
-
-    // Bottom separator line (y: 191)
-    cga.line(0, 191, 319, 191, 3);
+    this.drawMist(36, 176, 18, 10, game.clock);
+    this.sprite(V1_SAIL_SPRITE, 70, 178);
+    if (Math.floor(game.clock * 2) % 2 === 0) cga.text('(any key to start  )', 80, 184, 3);
   }
 
-  // ----------------------------------------------------- TOP-RIGHT BOAT CLOSE-UP
-  renderBoatCloseUp(cga, x, y, w, h, game) {
-    cga.fill(x, y, w, h, 0);
+  // ------------------------------------------------------------ painel esquerdo
+  textPane(lines, bottom) {
+    const cga = this.cga;
+    cga.fill(8, 8, 184, 184, 0);
+    const first = lines[0] || '';
+    cga.text(first, 8 + Math.floor((184 - first.length * 8) / 2), 12, 3);
+    for (let i = 1; i < lines.length; i++) cga.text(lines[i], 12, 12 + i * 10, 3);
+    if (bottom) cga.text(bottom, 8 + Math.floor((184 - bottom.length * 8) / 2), 180, 3);
+  }
 
-    const cx = x + Math.floor(w / 2);
-    const cy = y + Math.floor(h / 2);
-    const boat = game.boat;
+  renderMenu() {
+    const cga = this.cga;
+    cga.fill(8, 8, 184, 184, 0);
+    cga.text('SAILING', 8 + Math.floor((184 - 56) / 2), 12, 3);
+    const lines = [
+      'Before playing, you', 'may wish to review', 'some or all of the',
+      'instruction screens.', 'Select option.', '',
+      '(B) to begin game', '(P) for practice leg', '(X) exit to system', '',
+      '(A)ll instructions', '(O)bject of the game', '(C)ontrols', '(S)coring',
+      '(H)azards', '(G)auges'
+    ];
+    lines.forEach((l, i) => cga.text(l, 12, 26 + i * 10, 3));
+    cga.text('TYPE OPTION', 8 + Math.floor((184 - 88) / 2), 182, 3);
+  }
 
-    // Relative wind angle off the bow:
-    // In this display, WIND BLOWS DOWNWARDS from the top bezel (red arrows indicate wind flow).
-    // The boat's heading relative to the wind:
-    // When heading into the wind, bow points UP (angle = 0).
-    // When running with wind, bow points DOWN (angle = 180).
-    const relWindDeg = -boat.apparentWindAngle; // Invert so port/stbd match visual orientation
-    const relRad = relWindDeg * (Math.PI / 180);
-
-    const cosH = Math.cos(relRad);
-    const sinH = Math.sin(relRad);
-
-    // Transform local boat coordinates to screen coordinates
-    const toScreen = (lx, ly) => ({
-      x: Math.round(cx + lx * cosH - ly * sinH),
-      y: Math.round(cy + lx * sinH + ly * cosH)
-    });
-
-    // 1. Draw water wake if moving
-    if (boat.speed > 0.5) {
-      const stern = toScreen(0, 24);
-      const w1 = toScreen(-6, 32);
-      const w2 = toScreen(6, 32);
-      cga.line(stern.x, stern.y, w1.x, w1.y, 1);
-      cga.line(stern.x, stern.y, w2.x, w2.y, 1);
-    }
-
-    // 2. Boat Hull Outline (Red = 2)
-    const bow = toScreen(0, -26);
-    const portBow = toScreen(-9, -10);
-    const stbdBow = toScreen(9, -10);
-    const portMid = toScreen(-10, 8);
-    const stbdMid = toScreen(10, 8);
-    const portStern = toScreen(-7, 24);
-    const stbdStern = toScreen(7, 24);
-
-    cga.line(bow.x, bow.y, portBow.x, portBow.y, 2);
-    cga.line(portBow.x, portBow.y, portMid.x, portMid.y, 2);
-    cga.line(portMid.x, portMid.y, portStern.x, portStern.y, 2);
-
-    cga.line(bow.x, bow.y, stbdBow.x, stbdBow.y, 2);
-    cga.line(stbdBow.x, stbdBow.y, stbdMid.x, stbdMid.y, 2);
-    cga.line(stbdMid.x, stbdMid.y, stbdStern.x, stbdStern.y, 2);
-
-    cga.line(portStern.x, portStern.y, stbdStern.x, stbdStern.y, 2);
-
-    // Cockpit & deck details
-    const mast = toScreen(0, -6);
-    cga.fill(mast.x - 1, mast.y - 1, 3, 3, 3); // Mast (Brown)
-
-    // 3. Boom & Sail (Brown = 3 or Red = 2)
-    // Boom rotates around mast by boat.boomAngle
-    let boomRad = (relWindDeg + boat.boomAngle + 180) * (Math.PI / 180);
-    let boomLen = 22;
-
-    // If luffing (in-irons), vibrate boom and draw fluttering sail!
-    let luffOffset = 0;
-    if (boat.isLuffing) {
-      luffOffset = (Math.random() - 0.5) * 8;
-      boomRad += luffOffset * (Math.PI / 180);
-      if (window.v1Audio && window.v1Audio.luffFlutter) {
-        window.v1Audio.luffFlutter();
-      }
-    }
-
-    const boomEndX = Math.round(mast.x + Math.sin(boomRad) * boomLen);
-    const boomEndY = Math.round(mast.y - Math.cos(boomRad) * boomLen);
-
-    // Boom line (Brown = 3)
-    cga.line(mast.x, mast.y, boomEndX, boomEndY, 3);
-
-    // Sail shape / belly curve (drawn towards the wind or billowing)
-    const midX = Math.round((mast.x + boomEndX) / 2 + Math.sin(boomRad + 1.57) * (boat.isLuffing ? luffOffset : 4));
-    const midY = Math.round((mast.y + boomEndY) / 2 - Math.cos(boomRad + 1.57) * (boat.isLuffing ? luffOffset : 4));
-    cga.line(mast.x, mast.y, midX, midY, 3);
-    cga.line(midX, midY, boomEndX, boomEndY, 3);
-
-    // Status label at bottom of boat quadrant
-    if (boat.isLuffing) {
-      if (this.blinkOn) cga.textCenter("IN IRONS", x, w, y + h - 11, 2);
-    } else {
-      cga.textCenter(boat.pointOfSail, x, w, y + h - 11, 3);
+  renderInstructions(game) {
+    const pages = V1Game.PAGES[game.instrKey];
+    const lines = pages[game.instrPage] || pages[0];
+    this.textPane(lines, 'Hit SPACE to continue');
+    if (game.instrKey === 'H') {
+      const cga = this.cga, cx = 100, cy = 56;
+      if (game.instrPage === 0) this.drawMist(cx, cy, 14, 10, game.clock);
+      if (game.instrPage === 1) this.drawVortex(cx, cy, 22);
+      if (game.instrPage === 2) this.sprite(V1_SPEEDBOAT_SPRITE, cx, cy);
+      if (game.instrPage === 3) for (let x = 20; x < 180; x += 3) cga.pset(x, cy + (x % 2), 1);
     }
   }
 
-  // ----------------------------------------------------- TILLER / RUDDER GAUGE
-  renderTillerGauge(cga, x, y, w, h, game) {
-    cga.fill(x, y, w, h, 0);
-
-    const midX = x + Math.floor(w / 2);
-    const midY = y + Math.floor(h / 2);
-
-    // Tiller track (Brown = 3)
-    cga.line(x + 12, midY, x + w - 12, midY, 3);
-    // Center tick mark
-    cga.line(midX, midY - 3, midX, midY + 3, 3);
-    // Quarter ticks
-    cga.line(midX - 22, midY - 2, midX - 22, midY + 2, 3);
-    cga.line(midX + 22, midY - 2, midX + 22, midY + 2, 3);
-
-    // 'P' (Port) and 'S' (Starboard) labels
-    cga.text("P", x + 3, y + 3, 3);
-    cga.text("S", x + w - 9, y + 3, 3);
-
-    // Red indicator block for current rudder position
-    const offset = Math.round(game.boat.tillerDisplay * 38);
-    const rx = midX + offset - 2;
-    cga.fill(rx, midY - 4, 5, 9, 2);
+  renderLegIntro(game) {
+    const m = game.map;
+    this.renderSea(game);
+    const cga = this.cga;
+    cga.fill(24, 60, 152, 72, 0);
+    cga.rect(24, 60, 152, 72, 3);
+    cga.textCenter(game.practice ? 'PRACTICE LEG' : 'LEG ' + game.leg + ' OF 3', 24, 152, 68, 3);
+    cga.textCenter(m.ports[m.legs[game.leg].from].name, 24, 152, 84, 2);
+    cga.textCenter('TO', 24, 152, 94, 3);
+    cga.textCenter(m.ports[m.legs[game.leg].to].name, 24, 152, 104, 2);
+    cga.textCenter('Hit SPACE to sail', 24, 152, 118, 3);
   }
 
-  // --------------------------------------------- RADAR & INSTRUMENTS QUADRANT
-  renderRadarAndInstruments(cga, x, y, w, h, game) {
-    cga.fill(x, y, w, h, 0);
-
-    // 1. Digital Clock & Lives
-    const totalSec = Math.floor(game.elapsedTime);
-    const mm = String(Math.floor(totalSec / 60)).padStart(2, '0');
-    const ss = String(totalSec % 60).padStart(2, '0');
-    cga.text(`${mm}:${ss}`, x + 4, y + 4, 3);
-
-    // Lives icons (red boat silhouettes)
-    for (let i = 0; i < Math.min(4, game.lives); i++) {
-      const lx = x + 62 + i * 11;
-      const ly = y + 5;
-      cga.pset(lx + 2, ly, 2);
-      cga.line(lx, ly + 2, lx + 4, ly + 2, 2);
-      cga.line(lx + 1, ly + 4, lx + 3, ly + 4, 2);
-    }
-
-    // 2. Hull Damage Gauge: D [=====] F
-    cga.text("D", x + 4, y + 15, 2);
-    cga.text("F", x + w - 12, y + 15, 1);
-    cga.rect(x + 15, y + 16, w - 30, 6, 3);
-
-    const dmgWidth = Math.round(((w - 32) * (100 - game.boat.damage)) / 100);
-    if (dmgWidth > 0) {
-      cga.fill(x + 16, y + 17, dmgWidth, 4, 2);
-    }
-
-    // 3. Mini Bermuda Triangle Radar Map (x: 204, y: 153, w: 104, h: 36)
-    const rx0 = x + 4;
-    const ry0 = y + 25;
-    const rw = w - 8;
-    const rh = 34;
-    cga.rect(rx0, ry0, rw, rh, 3);
-
-    // Scale world (1472 x 1104) down to (rw x rh)
-    const scaleX = (rw - 4) / game.map.width;
-    const scaleY = (rh - 4) / game.map.height;
-
-    // Draw mini green island dots/rects
-    for (const island of game.map.islands) {
-      const ix = Math.round(rx0 + 2 + island.x * scaleX);
-      const iy = Math.round(ry0 + 2 + island.y * scaleY);
-      const iw = Math.max(2, Math.round(island.w * scaleX));
-      const ih = Math.max(2, Math.round(island.h * scaleY));
-      cga.fill(ix, iy, iw, ih, 1);
-    }
-
-    // Current sector highlight box
-    const secX = Math.floor(game.boat.x / game.map.SECTOR_W);
-    const secY = Math.floor(game.boat.y / game.map.SECTOR_H);
-    const sx0 = Math.round(rx0 + 2 + (secX * game.map.SECTOR_W) * scaleX);
-    const sy0 = Math.round(ry0 + 2 + (secY * game.map.SECTOR_H) * scaleY);
-    const sw = Math.round(game.map.SECTOR_W * scaleX);
-    const sh = Math.round(game.map.SECTOR_H * scaleY);
-
-    if (this.blinkOn) {
-      cga.rect(sx0, sy0, Math.max(4, sw), Math.max(4, sh), 2);
-    }
-
-    // Flashing boat pixel
-    const bx = Math.round(rx0 + 2 + game.boat.x * scaleX);
-    const by = Math.round(ry0 + 2 + game.boat.y * scaleY);
-    cga.pset(bx, by, this.blinkOn ? 3 : 2);
+  renderLegDone(game) {
+    this.renderSea(game);
+    const cga = this.cga;
+    cga.fill(16, 40, 168, 112, 0);
+    cga.rect(16, 40, 168, 112, 3);
+    cga.textCenter('LEG ' + game.leg + ' COMPLETE', 16, 168, 48, 3);
+    cga.text('TIME   ' + this.mmss(game.time), 28, 70, 3);
+    cga.text('SAVED  ' + game.rescued + '/7', 28, 82, 3);
+    cga.text('BONUS  ' + game.lastBonus, 28, 94, 3);
+    cga.text('SCORE  ' + game.score, 28, 106, 2);
+    cga.textCenter('Hit SPACE', 16, 168, 130, 3);
   }
 
-  // ----------------------------------------------------------- SECTOR MAP VIEW
-  renderMainMapView(cga, x, y, w, h, game) {
-    cga.fill(x, y, w, h, 0);
-    cga.setClip(x, y, w, h);
+  renderGameOver(game) {
+    const cga = this.cga;
+    cga.fill(8, 8, 184, 184, 0);
+    cga.textCenter('GAME OVER', 8, 184, 50, 2);
+    cga.textCenter('FINAL SCORE', 8, 184, 84, 3);
+    cga.textCenter(String(game.score), 8, 184, 98, 2);
+    cga.textCenter('Hit SPACE', 8, 184, 150, 3);
+  }
 
-    const boat = game.boat;
-    const map = game.map;
+  // ------------------------------------------------------------ mar
+  renderSea(game) {
+    const cga = this.cga, m = game.map, b = game.boat;
+    const sx = Math.floor(b.x / m.SEC), sy = Math.floor(b.y / m.SEC);
+    const wx0 = sx * m.SEC, wy0 = sy * m.SEC;
+    const ox = 8 - wx0, oy = 8 - wy0;
+    cga.setClip(8, 8, 184, 184);
+    cga.fill(8, 8, 184, 184, 0);
 
-    // Current Sector Coordinates
-    const secX = Math.floor(boat.x / map.SECTOR_W);
-    const secY = Math.floor(boat.y / map.SECTOR_H);
-
-    // Sector World Origin
-    const secWorldX = secX * map.SECTOR_W;
-    const secWorldY = secY * map.SECTOR_H;
-
-    // Transform world coords to screen coords in left quadrant
-    const toScreen = (wx, wy) => ({
-      x: Math.round(x + (wx - secWorldX)),
-      y: Math.round(y + (wy - secWorldY))
-    });
-
-    // 1. Draw Islands & Coastlines in this sector (CGA Green = 1)
-    // Drawn with 4px stepped CGA blocks for true 1983 pixel fidelity
-    for (const island of map.islands) {
-      // Check if island intersects this sector
-      if (island.x + island.w >= secWorldX && island.x <= secWorldX + map.SECTOR_W &&
-          island.y + island.h >= secWorldY && island.y <= secWorldY + map.SECTOR_H) {
-
-        const p0 = toScreen(island.x, island.y);
-        const p1 = toScreen(island.x + island.w, island.y + island.h);
-
-        // Fill with stepped 4px blocks
-        const bx0 = Math.floor(p0.x / 4) * 4;
-        const by0 = Math.floor(p0.y / 4) * 4;
-        const bx1 = Math.ceil(p1.x / 4) * 4;
-        const by1 = Math.ceil(p1.y / 4) * 4;
-
-        cga.fill(bx0, by0, bx1 - bx0, by1 - by0, 1);
+    // terra e caveiras
+    const c0 = sx * 23, r0 = sy * 23;
+    for (let r = 0; r < 23; r++) {
+      for (let c = 0; c < 23; c++) {
+        const cx = c0 + c, cy = r0 + r;
+        const px = 8 + c * 8, py = 8 + r * 8;
+        if (m.isWallCell(cx, cy)) this.skull(px, py);
+        else if (m.isLandCell(cx, cy)) cga.fill(px, py, 8, 8, 1);
       }
     }
 
-    // 2. Draw Coral Reefs in this sector (Brown = 3)
-    for (const reef of map.reefs) {
-      const p = toScreen(reef.x, reef.y);
-      if (p.x >= x - 20 && p.x <= x + w + 20 && p.y >= y - 20 && p.y <= y + h + 20) {
-        cga.circle(p.x, p.y, Math.round(reef.r / 3), 3);
-        cga.pset(p.x, p.y, 3);
-        cga.pset(p.x - 3, p.y - 2, 3);
-        cga.pset(p.x + 3, p.y + 2, 3);
-      }
+    // porto de chegada
+    const p = m.endPort;
+    if (Math.floor(p.x / m.SEC) === sx && Math.floor(p.y / m.SEC) === sy &&
+        Math.floor(game.clock * 2) % 2 === 0) {
+      cga.fill(p.x + ox - 4, p.y + oy - 4, 8, 8, 3);
+      cga.fill(p.x + ox - 2, p.y + oy - 2, 4, 4, 0);
     }
 
-    // 3. Draw Destination Port in this sector
-    const port = map.ports[game.leg];
-    if (port && port.targetSecX === secX && port.targetSecY === secY) {
-      const pp = toScreen(port.x, port.y);
-      // Flashing port buoy
-      cga.circle(pp.x, pp.y, 6, this.blinkOn ? 1 : 3);
-      cga.line(pp.x, pp.y - 8, pp.x, pp.y + 8, 3);
-      cga.line(pp.x - 8, pp.y, pp.x + 8, pp.y, 3);
-      cga.text("PORT", pp.x - 14, pp.y - 16, 1);
+    // tempestade
+    if (Math.floor(m.storm.y / m.SEC) === sy) {
+      const y = Math.round(m.storm.y + oy);
+      for (let x = 8; x < 192; x += 2) cga.pset(x, y, 1);
     }
 
-    // 4. Draw Swimmers (Castaways) as brown rings
-    for (const s of map.swimmers) {
-      if (s.rescued) continue;
-      const sp = toScreen(s.x, s.y);
-      if (sp.x >= x && sp.x <= x + w && sp.y >= y && sp.y <= y + h) {
-        cga.circle(sp.x, sp.y, 3, 3);
-        cga.pset(sp.x, sp.y, this.blinkOn ? 2 : 3);
-      }
+    for (const v of m.vortices) {
+      if (this.inSector(v, sx, sy, m)) this.drawVortex(v.x + ox, v.y + oy, v.r);
+    }
+    for (const mist of m.mists) {
+      if (this.inSector(mist, sx, sy, m)) this.drawMist(mist.x + ox, mist.y + oy, 13, 9, game.clock);
+    }
+    for (const c of m.castaways) {
+      if (!c.got && this.inSector(c, sx, sy, m)) this.sprite(V1_CASTAWAY_SPRITE, c.x + ox, c.y + oy);
+    }
+    for (const s of m.speedboats) {
+      if (this.inSector(s, sx, sy, m)) this.sprite(V1_SPEEDBOAT_SPRITE, s.x + ox, s.y + oy, s.vx < 0);
     }
 
-    // 5. Draw Dynamic Hazards (Sharks, Powerboats, Whirlwinds, Anomalies)
-    for (const haz of map.hazards) {
-      const hp = toScreen(haz.x, haz.y);
-      if (hp.x < x - 20 || hp.x > x + w + 20 || hp.y < y - 20 || hp.y > y + h + 20) continue;
+    this.sprite(V1_SAIL_SPRITE, b.x + ox, b.y + oy);
+    cga.resetClip();
 
-      if (haz.type === 'shark') {
-        // Red shark fin
-        cga.line(hp.x, hp.y - 3, hp.x + 4, hp.y + 2, 2);
-        cga.line(hp.x + 4, hp.y + 2, hp.x - 3, hp.y + 2, 2);
-        cga.line(hp.x - 3, hp.y + 2, hp.x, hp.y - 3, 2);
-      } else if (haz.type === 'speedboat') {
-        // Fast red craft with dashed wake
-        cga.rect(hp.x - 4, hp.y - 2, 8, 4, 2);
-        cga.pset(hp.x - 6, hp.y, 3);
-        cga.pset(hp.x - 8, hp.y, 3);
-      } else if (haz.type === 'whirlwind') {
-        // Swirling vortex
-        cga.circle(hp.x, hp.y, 8, 1);
-        cga.circle(hp.x, hp.y, 4, 2);
-      } else if (haz.type === 'anomaly') {
-        // Pulsing alien diamond
-        cga.line(hp.x, hp.y - 6, hp.x + 6, hp.y, 2);
-        cga.line(hp.x + 6, hp.y, hp.x, hp.y + 6, 2);
-        cga.line(hp.x, hp.y + 6, hp.x - 6, hp.y, 2);
-        cga.line(hp.x - 6, hp.y, hp.x, hp.y - 6, 2);
-        cga.pset(hp.x, hp.y, 3);
-      }
+    if (game.messageTimer > 0 && game.state === 'PLAYING') {
+      cga.fill(8, 8, 184, 10, 0);
+      cga.textCenter(game.message, 8, 184, 9, 3);
     }
-
-    // 6. Draw Boat Wake Trail on Map
-    for (const wk of boat.wake) {
-      const wp = toScreen(wk.x, wk.y);
-      if (wp.x >= x && wp.x <= x + w && wp.y >= y && wp.y <= y + h) {
-        cga.pset(wp.x, wp.y, 1);
-      }
+    if (game.paused) {
+      cga.fill(48, 88, 96, 16, 0);
+      cga.rect(48, 88, 96, 16, 3);
+      cga.textCenter('PAUSED', 48, 96, 92, 3);
     }
+  }
 
-    // 7. Draw Player's Boat Sprite (Red = 2 with Brown = 3 mast)
-    const bp = toScreen(boat.x, boat.y);
-    const bRad = boat.heading * (Math.PI / 180);
-    const cosB = Math.cos(bRad);
-    const sinB = Math.sin(bRad);
+  inSector(o, sx, sy, m) {
+    return Math.floor(o.x / m.SEC) === sx && Math.floor(o.y / m.SEC) === sy;
+  }
 
-    const bTip = { x: Math.round(bp.x + sinB * 7), y: Math.round(bp.y - cosB * 7) };
-    const bLeft = { x: Math.round(bp.x - sinB * 5 - cosB * 4), y: Math.round(bp.y + cosB * 5 - sinB * 4) };
-    const bRight = { x: Math.round(bp.x - sinB * 5 + cosB * 4), y: Math.round(bp.y + cosB * 5 + sinB * 4) };
+  drawVortex(x, y, r) {
+    const cga = this.cga;
+    let c = 3;
+    for (let rr = 2; rr <= r; rr += 2) { cga.circle(Math.round(x), Math.round(y), rr, c); c = c === 3 ? 2 : 3; }
+  }
 
-    cga.line(bTip.x, bTip.y, bLeft.x, bLeft.y, 2);
-    cga.line(bTip.x, bTip.y, bRight.x, bRight.y, 2);
-    cga.line(bLeft.x, bLeft.y, bRight.x, bRight.y, 2);
-
-    // Fill inner hull
-    const midX = Math.round((bTip.x + bLeft.x + bRight.x) / 3);
-    const midY = Math.round((bTip.y + bLeft.y + bRight.y) / 3);
-    cga.line(bTip.x, bTip.y, midX, midY, 2);
-    cga.line(bLeft.x, bLeft.y, midX, midY, 2);
-    cga.line(bRight.x, bRight.y, midX, midY, 2);
-
-    // Prominent mast dot (Brown = 3)
-    cga.fill(bp.x - 1, bp.y - 1, 3, 3, 3);
-
-    // 8. Radio narrative overlay banner
-    if (game.radioMessage && game.radioTimer > 0) {
-      cga.fill(x + 2, y + h - 18, w - 4, 16, 0);
-      cga.rect(x + 2, y + h - 18, w - 4, 16, 3);
-      cga.text(game.radioMessage.substring(0, 22), x + 6, y + h - 14, 3);
+  drawMist(x, y, rx, ry, t) {
+    const cga = this.cga;
+    let s = Math.floor(t * 8) * 2654435761 >>> 0;
+    const rnd = () => { s ^= s << 13; s >>>= 0; s ^= s >>> 17; s ^= s << 5; s >>>= 0; return s / 4294967296; };
+    for (let i = 0; i < 120; i++) {
+      const a = rnd() * Math.PI * 2, d = Math.sqrt(rnd());
+      cga.pset(Math.round(x + Math.cos(a) * rx * d), Math.round(y + Math.sin(a) * ry * d), 1 + Math.floor(rnd() * 3));
     }
+  }
 
-    // Sector coordinates stamp in corner
-    cga.text(`SEC ${secX},${secY}`, x + 4, y + 4, 3);
+  // ------------------------------------------------------------ painel direito
+  renderCloseUp(game) {
+    const cga = this.cga, b = game.boat;
+    cga.setClip(200, 8, 112, 112);
+    const cx = 256, cy = 64, L = 62;
+    const hr = b.heading * Math.PI / 180;
+    const f = [Math.sin(hr), -Math.cos(hr)];
+    const rt = [Math.cos(hr), Math.sin(hr)];
 
+    const left = [], right = [];
+    for (let i = 0; i < V1_HULL.length; i++) {
+      const t = i / (V1_HULL.length - 1);
+      const px = cx + f[0] * (L / 2 - t * L), py = cy + f[1] * (L / 2 - t * L);
+      left.push([px - rt[0] * V1_HULL[i], py - rt[1] * V1_HULL[i]]);
+      right.push([px + rt[0] * V1_HULL[i], py + rt[1] * V1_HULL[i]]);
+    }
+    this.fillPoly(left.concat(right.reverse()), 2);
+
+    const bow = [cx + f[0] * L / 2, cy + f[1] * L / 2];
+    const stern = [cx - f[0] * L / 2, cy - f[1] * L / 2];
+    cga.line(Math.round(bow[0]), Math.round(bow[1]),
+             Math.round(bow[0] + f[0] * 7), Math.round(bow[1] + f[1] * 7), 1);
+
+    // retranca (laranja) a partir do mastro a ~20% do casco
+    const mast = [cx + f[0] * (L / 2 - L * 0.2), cy + f[1] * (L / 2 - L * 0.2)];
+    const bb = b.boomBearing() * Math.PI / 180;
+    cga.line(Math.round(mast[0]), Math.round(mast[1]),
+             Math.round(mast[0] + Math.sin(bb) * 42), Math.round(mast[1] - Math.cos(bb) * 42), 3);
+
+    // pá do leme (verde)
+    const rb = b.rudderBearing() * Math.PI / 180;
+    cga.line(Math.round(stern[0]), Math.round(stern[1]),
+             Math.round(stern[0] + Math.sin(rb) * 14), Math.round(stern[1] - Math.cos(rb) * 14), 1);
     cga.resetClip();
   }
 
-  // ------------------------------------------------------------- TELEMETRY HUD
-  renderTelemetryHUD(cga, x, y, game) {
-    const boat = game.boat;
-    cga.fill(x, y, 168, 56, 0);
-    cga.rect(x, y, 168, 56, 3);
-
-    const hdgStr = String(Math.round(boat.heading)).padStart(3, '0');
-    const wndStr = String(Math.round(game.windDir)).padStart(3, '0');
-    const awaStr = (boat.apparentWindAngle >= 0 ? '+' : '') + Math.round(boat.apparentWindAngle);
-
-    cga.text(`HDG: ${hdgStr}°  SPD: ${boat.speed.toFixed(1)}KT`, x + 4, y + 4, 3);
-    cga.text(`WND: ${wndStr}° @ ${game.windSpeed}KT`, x + 4, y + 14, 3);
-    cga.text(`AWA: ${awaStr}° [${boat.pointOfSail}]`, x + 4, y + 24, boat.isLuffing ? 2 : 1);
-    cga.text(`SHT: ${Math.round(boat.sheetAngle)}° OPT: ${boat.optimalSheet}°`, x + 4, y + 34, 3);
-    cga.text(`STATUS: ${boat.isLuffing ? "IN IRONS!" : "UNDER WAY"}`, x + 4, y + 44, boat.isLuffing ? 2 : 1);
+  renderSpeed(game) {
+    const cga = this.cga, b = game.boat;
+    cga.fill(200, 120, 112, 8, 3);
+    cga.fill(200, 122, 112, 1, 2);
+    for (let x = 200; x < 312; x += 8) cga.fill(x, 120, 1, 5, 2);
+    const w = Math.round(112 * Math.min(1, b.speed / V1_MAX_SPEED));
+    cga.fill(200, 121, w, 3, 2);
   }
 
-  // ------------------------------------------------------------- TITLE SCREEN
-  renderTitleScreen(cga, x, y, w, h, game) {
-    cga.fill(x, y, w, h, 0);
-
-    cga.textCenter("SAILING...", x, w, y + 8, 3);
-    cga.textCenter("AN ADVENTURE IN THE", x, w, y + 20, 3);
-    cga.textCenter("BERMUDA TRIANGLE", x, w, y + 30, 2);
-
-    cga.line(x + 10, y + 42, x + w - 10, y + 42, 3);
-
-    const opts = [
-      { key: 'B', label: "[B] - BEGIN GAME" },
-      { key: 'P', label: "[P] - PRACTICE SAILING" },
-      { key: 'O', label: "[O] - OBJECTIVE" },
-      { key: 'C', label: "[C] - CONTROLS" },
-      { key: 'S', label: "[S] - SAILING BASICS" },
-      { key: 'H', label: "[H] - HAZARDS" },
-      { key: 'G', label: "[G] - GEOGRAPHY" },
-      { key: 'A', label: "[A] - ALL INSTRUCTIONS" },
-      { key: 'T', label: "[T] - TELEMETRY HUD" }
-    ];
-
-    for (let i = 0; i < opts.length; i++) {
-      const opt = opts[i];
-      const isHovered = this.hoveredMenuOption === opt.key;
-      const c = isHovered ? 1 : 3;
-      cga.text(opt.label, x + 12, y + 48 + i * 11, c);
-    }
-
-    cga.line(x + 10, y + 150, x + w - 10, y + 150, 3);
-    cga.textCenter("DYNETRON COMPANY (C) 1983", x, w, y + 156, 3);
-    cga.textCenter("PRESS KEY OR CLICK OPTION", x, w, y + 168, this.blinkOn ? 1 : 3);
-  }
-
-  getMenuOptionAt(cx, cy) {
-    // Relative to left quadrant (x: 8 to 192, y: 8 to 192)
-    if (cx < 8 || cx > 192 || cy < 56 || cy > 156) return null;
-    const row = Math.floor((cy - 56) / 11);
-    const keys = ['B', 'P', 'O', 'C', 'S', 'H', 'G', 'A', 'T'];
-    return keys[row] || null;
-  }
-
-  // ------------------------------------------------------- INSTRUCTION SCREENS
-  renderInstructions(cga, x, y, w, h, game) {
-    cga.fill(x, y, w, h, 0);
-
-    const key = game.currentInstruction || 'O';
-    const pages = {
-      'O': {
-        title: "OBJECTIVE",
-        lines: [
-          "YOU ARE CAPTAIN OF A 36-FT",
-          "SLOOP IN THE DANGEROUS",
-          "BERMUDA TRIANGLE.",
-          "",
-          "NAVIGATE 3 LEGS ACROSS",
-          "THE MYSTERIOUS CARIBBEAN:",
-          " 1. MIAMI TO BERMUDA",
-          " 2. BERMUDA TO SAN JUAN",
-          " 3. SAN JUAN TO MIAMI",
-          "",
-          "RESCUE CASTAWAYS FOR",
-          "500 PTS EACH AND REACH",
-          "DESTINATION HARBOURS."
-        ]
-      },
-      'C': {
-        title: "CONTROLS",
-        lines: [
-          "STEERING (RUDDER):",
-          " [LEFT / A]  - PORT (LEFT)",
-          " [RIGHT / D] - STBD (RIGHT)",
-          "",
-          "SAIL TRIM (SHEET):",
-          " [UP / W]   - SHEET IN (TIGHT)",
-          " [DOWN / S] - SHEET OUT (EASE)",
-          "",
-          "OTHER COMMANDS:",
-          " [T] - TOGGLE TELEMETRY HUD",
-          " [M] - MUTE AUDIO",
-          " [B] - BEGIN GAME NOW"
-        ]
-      },
-      'S': {
-        title: "SAILING BASICS",
-        lines: [
-          "A BOAT CANNOT SAIL DIRECTLY",
-          "INTO THE WIND (IN-IRONS).",
-          "",
-          "TO GO UPWIND:",
-          "TACK IN A ZIG-ZAG AT 45 DEG",
-          "TO THE WIND WITH SHEET TIGHT.",
-          "",
-          "OFF THE WIND:",
-          "EASE THE SHEET AS YOU TURN",
-          "AWAY FROM THE WIND.",
-          "",
-          "BEAM REACH (90 DEG) IS YOUR",
-          "FASTEST POINT OF SAIL!"
-        ]
-      },
-      'H': {
-        title: "HAZARDS",
-        lines: [
-          "WATCH OUT FOR:",
-          "",
-          "- CORAL REEFS (BROWN)",
-          "- SHARKS AND RUNAWAYS",
-          "- ROGUE SPEEDBOATS",
-          "- DERELICT SHIPS",
-          "- FREAK WHIRLWINDS",
-          "- MAGNETIC ANOMALIES",
-          "",
-          "COLLISIONS DAMAGE HULL (D).",
-          "AVOID RUNNING AGROUND!"
-        ]
-      },
-      'G': {
-        title: "GEOGRAPHY",
-        lines: [
-          "THE BERMUDA TRIANGLE:",
-          "",
-          "WEST: FLORIDA & KEYS",
-          "CENTRE: BAHAMA ISLANDS",
-          "NORTHEAST: BERMUDA",
-          "SOUTH: CUBA",
-          "SOUTHEAST: PUERTO RICO",
-          "",
-          "USE THE RADAR IN LOWER RIGHT",
-          "TO TRACK YOUR SECTOR."
-        ]
+  renderRadar(game) {
+    const cga = this.cga, m = game.map, b = game.boat;
+    const X = 200, Y = 128, W = 112, H = 64;
+    for (let my = 0; my < H; my++) {
+      const cy = Math.floor(my * m.CH / H);
+      for (let mx = 0; mx < W; mx++) {
+        const cx = Math.floor(mx * m.CW / W);
+        if (m.land[cy * m.CW + cx]) cga.pset(X + mx, Y + my, 1);
       }
+    }
+    const toX = v => X + Math.min(W - 1, Math.floor(v * W / m.W));
+    const toY = v => Y + Math.min(H - 1, Math.floor(v * H / m.H));
+    for (const c of m.castaways) if (!c.got) cga.pset(toX(c.x), toY(c.y), 3);
+    const p = m.endPort;
+    if (Math.floor(game.clock * 3) % 2 === 0) cga.fill(toX(p.x), toY(p.y), 2, 2, 3);
+    if (game.state === 'PLAYING' || game.state === 'LEG_INTRO') {
+      if (Math.floor(game.clock * 4) % 2 === 0) cga.fill(toX(b.x), toY(b.y), 2, 2, 2);
+    }
+  }
+
+  renderGauges(game) {
+    const cga = this.cga, b = game.boat;
+    // D (dano) à esquerda, F (combustível) à direita do radar
+    const bar = (x, frac, c) => {
+      cga.fill(x + 1, 130, 1, 60, 2);
+      for (let y = 130; y <= 190; y += 8) cga.fill(x, y, 3, 1, 2);
+      const h = Math.round(60 * frac);
+      cga.fill(x, 190 - h, 3, h, c);
     };
+    cga.fill(193, 126, 6, 66, 3);
+    cga.fill(313, 126, 6, 66, 3);
+    bar(194, b.damage / 100, 2);
+    bar(313, b.fuel / 100, 1);
+    cga.text('D', 192, 120, 2);
+    cga.text('F', 312, 120, 2);
 
-    const cur = pages[key] || pages['O'];
-
-    cga.textCenter(`* ${cur.title} *`, x, w, y + 8, 2);
-    cga.line(x + 10, y + 20, x + w - 10, y + 20, 3);
-
-    for (let i = 0; i < cur.lines.length; i++) {
-      cga.text(cur.lines[i], x + 8, y + 26 + i * 10, 3);
-    }
-
-    cga.line(x + 10, y + 162, x + w - 10, y + 162, 3);
-    cga.textCenter("[SPACE / CLICK TO RETURN]", x, w, y + 168, this.blinkOn ? 1 : 3);
-  }
-
-  // ------------------------------------------------------------- GENERIC MODAL
-  renderModal(cga, x, y, w, h, lines, borderCol = 3) {
-    const mw = w - 16;
-    const mh = lines.length * 12 + 16;
-    const mx = x + 8;
-    const my = y + Math.floor((h - mh) / 2);
-
-    cga.fill(mx, my, mw, mh, 0);
-    cga.rect(mx, my, mw, mh, borderCol);
-
-    for (let i = 0; i < lines.length; i++) {
-      const line = lines[i];
-      const col = (line.startsWith('*') || line.startsWith('[')) ? borderCol : 3;
-      cga.textCenter(line, mx, mw, my + 8 + i * 12, col);
+    // setas de vento (apontam para onde o vento sopra)
+    const wr = ((V1_WIND_FROM + 180) % 360) * Math.PI / 180;
+    for (const x of [197, 311]) {
+      const y = 40, dx = Math.sin(wr) * 12, dy = -Math.cos(wr) * 12;
+      cga.line(Math.round(x - dx), Math.round(y - dy), Math.round(x + dx), Math.round(y + dy), 2);
+      cga.fill(Math.round(x + dx) - 1, Math.round(y + dy) - 1, 3, 3, 2);
     }
   }
 
-  // ------------------------------------------------------------- BOTTOM STATUS
-  renderBottomStatus(cga, game) {
-    const scoreStr = String(game.score).padStart(6, '0');
-    cga.text(`SCORE: ${scoreStr}`, 8, 192, 3);
-    cga.text(`LEG: ${game.leg}/3`, 140, 192, 3);
-    cga.text(`SPD: ${game.boat.speed.toFixed(1)}KT`, 220, 192, 3);
+  renderFooter(game) {
+    const cga = this.cga;
+    cga.fill(200, 192, 120, 8, 3);
+    cga.text(this.mmss(game.time), 200, 192, 2);
+    for (let i = 0; i < game.boats; i++) this.sprite(V1_SAIL_SPRITE, 240 + i * 9, 196);
+    cga.text(String(Math.max(0, game.score)).padStart(5, '0'), 276, 192, 2);
   }
 }
 
