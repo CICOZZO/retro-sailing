@@ -2,7 +2,13 @@ import { spawn } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 
-const CHROME_PATH = 'C:\\Users\\ciro.cozzolino\\AppData\\Local\\Google\\Chrome\\Application\\chrome.exe';
+const CHROME_CANDIDATES = [
+  'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe',
+  'C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe',
+  path.join(process.env.LOCALAPPDATA || '', 'Google\\Chrome\\Application\\chrome.exe'),
+  'C:\\Users\\ciro.cozzolino\\AppData\\Local\\Google\\Chrome\\Application\\chrome.exe'
+];
+const CHROME_PATH = CHROME_CANDIDATES.find(p => p && fs.existsSync(p)) || CHROME_CANDIDATES[0];
 const TEMP_USER_DATA = path.join(process.env.TEMP || 'C:\\Temp', 'chrome_sailing_test_' + Date.now());
 
 fs.mkdirSync(TEMP_USER_DATA, { recursive: true });
