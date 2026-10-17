@@ -96,12 +96,21 @@ class V1Boat {
     else if (absr < 115) polar = 0.90 + ((absr - 50) / 65) * 0.10;
     else polar = 1.0 - ((absr - 115) / 65) * 0.18;
 
-    // ângulo real da retranca e eficiência do ajuste
+    // Pressão do vento na vela: com a vela caçada (menor sheet), a retenção e a pressão
+    // do vento no pano são maiores e a velocidade do barco aumenta.
     const phi = Math.min(this.sheet, absr);
-    this.luffing = this.sheet > absr + 12 && absr >= 25;
+    this.luffing = this.sheet >= absr && absr >= 25;
+
+    const sheetTightness = 1 - (this.sheet / 90); // 1.0 = toda caçada, 0.0 = toda folgada
+    const captureAngle = Math.min(90, Math.max(0, absr - phi * 0.85));
+    const captureSin = Math.sin(captureAngle * Math.PI / 180);
+
     let eff;
-    if (this.luffing) eff = 0.60;
-    else eff = Math.max(0.58, Math.min(1, 1 - Math.abs((absr - phi) - 22) / 75));
+    if (this.luffing) {
+      eff = 0.28;
+    } else {
+      eff = 0.32 + 0.68 * (0.55 * sheetTightness + 0.45 * captureSin);
+    }
 
     let target = V1_MAX_SPEED * polar * eff * this.windStrength;
 
