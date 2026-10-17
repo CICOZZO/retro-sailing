@@ -319,11 +319,10 @@ class V1Renderer {
     const bow = [cx + f[0] * L / 2, cy + f[1] * L / 2];
     const stern = [cx - f[0] * L / 2, cy - f[1] * L / 2];
 
-    // flâmula indicadora de vento na proa (verde, aponta na direção do vento)
+    // flâmula indicadora de vento na proa (verde, aponta de forma firme na direção do vento)
     const windDeg = typeof b.windTo === 'function' ? b.windTo() : ((V1_WIND_FROM + 180) % 360);
-    const flutter = Math.sin(game.clock * 10) * 0.07;
-    const wr = windDeg * Math.PI / 180 + flutter;
-    const wLen = Math.round(9 * (b.windStrength || 1));
+    const wr = windDeg * Math.PI / 180;
+    const wLen = 10;
     const wx = Math.sin(wr), wy = -Math.cos(wr);
     const tipX = Math.round(bow[0] + wx * wLen), tipY = Math.round(bow[1] + wy * wLen);
     cga.line(Math.round(bow[0]), Math.round(bow[1]), tipX, tipY, 1);
