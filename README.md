@@ -42,9 +42,8 @@ Sem teclado numérico: **← →** leme (segurar), **↑** caça, **↓** folga.
 ### 📱 Versão mobile (iPhone e iPad)
 
 `mobile.html` — só em paisagem, com o jogo em formato wide ocupando a altura toda (as 3 telas num bloco central). O menu inicial funciona por botões laterais; ao começar a perna aparecem os controles:
-* **Esquerda — barra vertical do leme:** arraste para cima (boreste) ou para baixo (bombordo). É de mola: ao soltar volta ao meio.
-* **Direita — barra vertical da escota:** em cima 90° (toda solta), embaixo 0° (toda caçada); fica no último ajuste.
-* Botão **MOTOR**, pausa (||) e sair (X).
+* **Esquerda — barra vertical da escota:** em cima 90° (toda solta), embaixo 0° (toda caçada); fica no último ajuste. Abaixo dela: botão **MOTOR**, pausa (||) e sair (X).
+* **Direita — barra vertical do leme:** arraste para cima (boreste) ou para baixo (bombordo). É de mola: ao soltar volta ao meio.
 
 iPhone/iPad que abrem `index.html` são redirecionados para ela (use `index.html?pc` para forçar a versão de PC). A versão de PC não tem as barras deslizantes.
 
@@ -61,3 +60,7 @@ Abra `index.html` em qualquer navegador moderno, ou dê duplo clique em `JOGAR.b
 ## 🧪 Teste de fumaça
 
 `node tools/test-chrome-cdp.mjs` (PC) e `node tools/test-mobile.mjs` (mobile, emulando iPhone com toque) abrem o Chrome headless, percorre título → menu → instruções → perna 1 e confere o estado do jogo (screenshots vão para a pasta TEMP).
+
+## 🎨 Ícone
+
+Veleiro em pixel art na paleta CGA, em `icons/` (favicon, apple-touch-icon e PNGs 192/512). Para regenerar: `node tools/make-icons.mjs`.
