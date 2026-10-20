@@ -21,15 +21,20 @@ Reescrita para reproduzir o jogo original conforme o vídeo de referência (http
 
 | Tecla | Função |
 | :--- | :--- |
-| **4 / 5 / 6** | Leme: bombordo / centro / boreste |
+| **4 / 6** (segurar) | Leme a bombordo / boreste. O leme é de mola: ao soltar, volta ao meio (**5** solta na hora) |
 | **7 / 8 / 9** | Folgar a vela 2° / 5° / 10° |
-| **1 / 2 / 3** | Caçar a vela 2° / 5° / 10° |
+| **1 / 2 / 3** | Caçar a vela 2° / 5° / 10° (0° = toda caçada, 90° = toda solta) |
 | **E** | Motor liga/desliga (gasta combustível) |
 | **S** · **P** | Som · Pausa |
 | **Q** | Encerra a perna de treino, ou o jogo, salvando a pontuação |
 | **X** | Sai |
 
-Sem teclado numérico: **← →** leme, **↑** caça, **↓** folga. Há também botões na tela.
+Sem teclado numérico: **← →** leme (segurar), **↑** caça, **↓** folga.
+
+**Na tela (celular/tablet ou mouse):**
+* **Esquerda — barra vertical da escota:** arraste para cima para folgar (até 90°) e para baixo para caçar (até 0°). Ela fica no último ajuste.
+* **Direita — barra horizontal do leme:** arraste para os lados para virar. Ao soltar, ela volta ao meio.
+* **E ENGINE** liga/desliga o motor.
 
 **Menu:** (B) começar · (P) perna de treino · (A) todas as instruções · (O)bjetivo · (C)ontroles · (S)coring · (H)azards · (G)auges.
 

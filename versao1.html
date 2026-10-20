@@ -44,23 +44,39 @@
       </div>
     </div>
 
-    <!-- Controles na tela (equivalem ao teclado numérico) -->
-    <div class="touch-bar">
-      <button class="t-v1-btn" id="v1PadLeft">&larr; 4 PORT</button>
-      <button class="t-v1-btn" id="v1PadCenter">5 CENTER</button>
-      <button class="t-v1-btn" id="v1PadRight">6 STBD &rarr;</button>
-      <button class="t-v1-btn" id="v1PadIn">2 SHEET IN</button>
-      <button class="t-v1-btn" id="v1PadOut">8 SHEET OUT</button>
-      <button class="t-v1-btn" id="v1PadEngine">E ENGINE</button>
+    <!-- Controles na tela: escota (vertical, à esquerda) e leme de mola (horizontal, à direita) -->
+    <div class="helm">
+      <div class="helm-sheet">
+        <span class="helm-cap">SOLTA 90°</span>
+        <div class="sheet-bar" id="v1SheetBar" role="slider" aria-label="Escota (retranca)" aria-valuemin="0" aria-valuemax="90">
+          <div class="sheet-fill" id="v1SheetFill"></div>
+          <div class="sheet-thumb" id="v1SheetThumb"></div>
+        </div>
+        <span class="helm-cap">CAÇADA 0°</span>
+        <span class="helm-value" id="v1SheetLabel">35°</span>
+      </div>
+
+      <div class="helm-mid">
+        <button class="t-v1-btn" id="v1PadEngine">E ENGINE</button>
+      </div>
+
+      <div class="helm-rudder">
+        <span class="helm-value" id="v1RudderLabel">LEME 0°</span>
+        <div class="rudder-bar" id="v1RudderBar" role="slider" aria-label="Leme" aria-valuemin="-45" aria-valuemax="45">
+          <div class="rudder-center"></div>
+          <div class="rudder-thumb" id="v1RudderThumb"></div>
+        </div>
+        <div class="helm-caps"><span>&larr; BOMBORDO</span><span>BORESTE &rarr;</span></div>
+      </div>
     </div>
 
   <!-- Scripts da Versão 1 -->
-  <script src="js/v1/v1-cga.js?v=4"></script>
-  <script src="js/v1/v1-audio.js?v=4"></script>
-  <script src="js/v1/v1-map.js?v=4"></script>
-  <script src="js/v1/v1-boat.js?v=4"></script>
-  <script src="js/v1/v1-render.js?v=4"></script>
-  <script src="js/v1/v1-game.js?v=4"></script>
-  <script src="js/v1/v1-main.js?v=4"></script>
+  <script src="js/v1/v1-cga.js?v=5"></script>
+  <script src="js/v1/v1-audio.js?v=5"></script>
+  <script src="js/v1/v1-map.js?v=5"></script>
+  <script src="js/v1/v1-boat.js?v=5"></script>
+  <script src="js/v1/v1-render.js?v=5"></script>
+  <script src="js/v1/v1-game.js?v=5"></script>
+  <script src="js/v1/v1-main.js?v=5"></script>
 </body>
 </html>

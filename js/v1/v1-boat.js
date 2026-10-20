@@ -9,8 +9,10 @@
  *    * Quando o barco aponta contra o vento ou a escota está mais solta que o ângulo
  *      do vento (this.sheet >= absr), a vela se alinha com o vento (phi = absr),
  *      paneja (ângulo de ataque = 0°) e não gera força!
- *    * Um comando caça a vela (1/2/3, ↑, SHEET IN -> reduz this.sheet) e o outro
- *      solta a vela (7/8/9, ↓, SHEET OUT -> aumenta this.sheet).
+ *    * Um comando caça a vela (1/2/3, ↑, barra vertical -> reduz this.sheet) e o outro
+ *      solta a vela (7/8/9, ↓, barra vertical -> aumenta this.sheet).
+ *  - Leme de mola: this.rudderInput (-1..+1) é o comando segurado pelo jogador; a pá
+ *    gira até ele a V1_RUDDER_RATE °/s e volta sozinha ao centro quando ele é solto.
  *  - Força propulsiva na vela (aerodinâmica vetorial):
  *    * Pressão do vento no pano: proporcional a sin(absr - phi) (ângulo entre o vento e a vela).
  *    * Projeção de avanço no rumo do barco (sustentação + empuxo): proporcional a sin(min(90°, phi + 18°)).
@@ -24,7 +26,8 @@
 const V1_WIND_FROM = 195;     // direção base de onde sopra o vento (graus)
 const V1_MAX_SPEED = 10.0;    // px/s
 const V1_MAX_RUDDER = 45;     // graus
-const V1_MIN_SHEET = 5;       // vela toda caçada (graus a partir do eixo da popa)
+const V1_RUDDER_RATE = 150;  // graus/s que a pá do leme gira (ida e volta ao centro)
+const V1_MIN_SHEET = 0;       // vela toda caçada (graus a partir do eixo da popa)
 const V1_MAX_SHEET = 90;      // vela toda solta (graus a partir do eixo da popa)
 
 function v1Wrap180(a) {
@@ -39,7 +42,8 @@ class V1Boat {
     this.y = y;
     this.heading = ((heading % 360) + 360) % 360;
     this.rudder = 0;
-    this.sheet = 35;          // escota inicial (5..90)
+    this.rudderInput = 0;     // comando do jogador (-1..+1); 0 = leme solto, volta ao meio
+    this.sheet = 35;          // escota inicial (0..90)
     this.speed = 0;
     this.windFrom = V1_WIND_FROM;
     this.windStrength = 1.0;
@@ -69,11 +73,10 @@ class V1Boat {
     this.sheet = Math.max(V1_MIN_SHEET, Math.min(V1_MAX_SHEET, this.sheet + delta));
   }
 
-  steer(delta) {
-    this.rudder = Math.max(-V1_MAX_RUDDER, Math.min(V1_MAX_RUDDER, this.rudder + delta));
+  /** Leme de mola: -1 todo a bombordo, +1 todo a boreste, 0 solto (volta ao meio). */
+  setRudderInput(v) {
+    this.rudderInput = Math.max(-1, Math.min(1, v));
   }
-
-  centerRudder() { this.rudder = 0; }
 
   update(dt) {
     if (dt <= 0) return;
@@ -83,7 +86,9 @@ class V1Boat {
     this.windFrom = ((V1_WIND_FROM + Math.sin(this.windTimer * 0.05) * 6) % 360 + 360) % 360;
     this.windStrength = 0.98 + Math.sin(this.windTimer * 0.07) * 0.04;
 
-    // 2. Leme e giro do casco
+    // 2. Leme (gira até o comando; solto, volta ao centro) e giro do casco
+    const rudderStep = V1_RUDDER_RATE * dt;
+    this.rudder += Math.max(-rudderStep, Math.min(rudderStep, this.rudderInput * V1_MAX_RUDDER - this.rudder));
     const steerAuthority = 0.35 + 0.65 * Math.min(1, this.speed / (V1_MAX_SPEED * 0.6));
     this.heading = ((this.heading + this.rudder * 0.95 * steerAuthority * dt) % 360 + 360) % 360;
 
@@ -116,8 +121,8 @@ class V1Boat {
       // Curva polar do casco conforme o ponto de velejo
       let polar;
       if (absr < 55) {
-        // Bolina (contravento)
-        polar = 0.65 + ((absr - 28) / 27) * 0.25;
+        // Bolina (contravento): cresce suave a partir da zona morta, sem degrau em 28°
+        polar = 0.90 * Math.sqrt((absr - 28) / 27);
       } else if (absr <= 125) {
         // Través / Alheta (ponto mais veloz)
         polar = 0.90 + Math.sin(((absr - 55) / 70) * Math.PI) * 0.10;
