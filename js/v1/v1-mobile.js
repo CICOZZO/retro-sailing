@@ -22,7 +22,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // ---------------------------------------------------------- sliders
   /** Slider vertical. `topValue` é o valor no topo, `bottomValue` no fundo. */
-  function makeSlider(el, topValue, bottomValue, onInput, snap) {
+  function makeSlider(el, topValue, bottomValue, onInput, snap, onRelease) {
     const thumb = el.querySelector('.thumb');
     let dragging = false;
     let value = (topValue + bottomValue) / 2;
@@ -50,7 +50,7 @@ document.addEventListener('DOMContentLoaded', () => {
       fromPointer(e);
     });
     el.addEventListener('pointermove', (e) => { if (dragging) { e.preventDefault(); fromPointer(e); } });
-    const end = () => { dragging = false; };
+    const end = () => { if (!dragging) return; dragging = false; if (onRelease) onRelease(); };
     el.addEventListener('pointerup', end);
     el.addEventListener('pointercancel', end);
 
@@ -62,22 +62,19 @@ document.addEventListener('DOMContentLoaded', () => {
     };
   }
 
+  // leme de mola: em cima = boreste (+1), embaixo = bombordo (-1); soltou, volta ao meio
   const rudder = makeSlider(
-    document.getElementById('sliderRudder'), V1_MAX_RUDDER, -V1_MAX_RUDDER,
-    (v) => game.setRudderAngle(v),
-    (v) => (Math.abs(v) < 3 ? 0 : Math.round(v))
+    document.getElementById('sliderRudder'), 1, -1,
+    (v) => game.setRudder(v),
+    (v) => (Math.abs(v) < 0.06 ? 0 : v),
+    () => game.setRudder(0)
   );
+  // escota: em cima 90° (toda solta), embaixo 0° (toda caçada); fica onde parou
   const sheet = makeSlider(
-    document.getElementById('sliderSheet'), 0, 90,
-    (v) => game.setSheetAngle(v),
+    document.getElementById('sliderSheet'), V1_MAX_SHEET, V1_MIN_SHEET,
+    (v) => game.setSheet(v),
     (v) => Math.round(v)
   );
-
-  document.getElementById('btnCenter').addEventListener('click', (e) => {
-    e.preventDefault();
-    game.centerRudderCmd();
-    rudder.set(0);
-  });
 
   const engineBtn = document.getElementById('btnEngine');
   engineBtn.addEventListener('click', (e) => {
@@ -97,10 +94,9 @@ document.addEventListener('DOMContentLoaded', () => {
     if (game.state !== lastState) {
       lastState = game.state;
       document.body.dataset.mode = MODE[game.state] || 'title';
-      if (game.state === 'LEG_INTRO') { rudder.set(0); sheet.set(0); }
     }
     if (game.state === 'PLAYING') {
-      rudder.set(game.reversed ? -game.boat.rudder : game.boat.rudder);
+      rudder.set(game.boat.rudder / V1_MAX_RUDDER);
       sheet.set(game.boat.sheet);
       engineBtn.classList.toggle('on', game.boat.engine);
     }

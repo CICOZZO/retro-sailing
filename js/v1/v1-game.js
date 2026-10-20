@@ -29,6 +29,7 @@ class V1Game {
     this.messageTimer = 0;
     this.lastBonus = 0;
     this.clock = 0;
+    this.rudderInput = 0;    // comando de leme segurado pelo jogador (-1..+1)
 
     // perna 1 já montada para que o menu possa desenhar o radar
     this.map.setupLeg(1);
@@ -112,14 +113,9 @@ class V1Game {
   // ------------------------------------------------------------ comandos
   get reversed() { return this.stormTimer > 0; }
 
-  rudderCmd(dir) {         // dir: -1 bombordo (4), +1 boreste (6)
-    if (this.state !== 'PLAYING' || this.paused) return;
-    this.boat.steer((this.reversed ? -dir : dir) * 5);
-  }
-
-  centerRudderCmd() {
-    if (this.state !== 'PLAYING' || this.paused) return;
-    this.boat.centerRudder();
+  /** Leme de mola: v = -1 (bombordo, 4) .. +1 (boreste, 6) enquanto segurado; 0 ao soltar. */
+  setRudder(v) {
+    this.rudderInput = Math.max(-1, Math.min(1, v));
   }
 
   sheetCmd(deg) {          // deg > 0 folga (7/8/9), deg < 0 caça (1/2/3)
@@ -128,16 +124,12 @@ class V1Game {
     if (window.v1Audio) window.v1Audio.sheetClick();
   }
 
-  /** Controles deslizantes (mobile): ângulos absolutos. */
-  setRudderAngle(deg) {
+  /** Barra vertical: escota em graus absolutos (0 caçada .. 90 solta); fica no último ajuste. */
+  setSheet(deg) {
     if (this.state !== 'PLAYING' || this.paused) return;
-    const d = Math.max(-V1_MAX_RUDDER, Math.min(V1_MAX_RUDDER, deg));
-    this.boat.rudder = this.reversed ? -d : d;
-  }
-
-  setSheetAngle(deg) {
-    if (this.state !== 'PLAYING' || this.paused) return;
-    this.boat.sheet = Math.max(0, Math.min(90, deg));
+    const before = this.boat.sheet;
+    this.boat.trim(deg - before);
+    if (window.v1Audio && Math.floor(before / 5) !== Math.floor(this.boat.sheet / 5)) window.v1Audio.sheetClick();
   }
 
   toggleEngine() { if (this.state === 'PLAYING') this.boat.engine = !this.boat.engine; }
@@ -163,6 +155,7 @@ class V1Game {
     this.stormTimer = Math.max(0, this.stormTimer - dt);
 
     m.update(dt);
+    b.setRudderInput(this.reversed ? -this.rudderInput : this.rudderInput);
     b.update(dt);
 
     // movimento com colisão contra terra/parede de caveiras

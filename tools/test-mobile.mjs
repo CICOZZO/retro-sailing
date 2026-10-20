@@ -2,7 +2,13 @@ import { spawn } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 
-const CHROME_PATH = 'C:\\Users\\ciro.cozzolino\\AppData\\Local\\Google\\Chrome\\Application\\chrome.exe';
+const CHROME_CANDIDATES = [
+  'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe',
+  'C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe',
+  path.join(process.env.LOCALAPPDATA || '', 'Google\\Chrome\\Application\\chrome.exe'),
+  'C:\\Users\\ciro.cozzolino\\AppData\\Local\\Google\\Chrome\\Application\\chrome.exe'
+];
+const CHROME_PATH = CHROME_CANDIDATES.find(p => p && fs.existsSync(p)) || CHROME_CANDIDATES[0];
 const TEMP_USER_DATA = path.join(process.env.TEMP || 'C:\\Temp', 'chrome_sailing_test_' + Date.now());
 
 fs.mkdirSync(TEMP_USER_DATA, { recursive: true });
@@ -118,12 +124,11 @@ async function runTest() {
     console.log('Screenshot salvo em:', p);
   };
   const click = (sel) => evalJs(`document.querySelector(${JSON.stringify(sel)}).click()`);
-  const drag = async (sel, frac) => {
+  const hold = async (sel, frac) => {
     const r = await evalJs(`(() => { const b = document.querySelector(${JSON.stringify(sel)}).getBoundingClientRect(); return { x: b.left + b.width / 2, top: b.top, h: b.height }; })()`);
-    const y = r.top + r.h * frac;
     await sendCmd('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x: r.x, y: r.top + r.h / 2 }] });
-    await sendCmd('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x: r.x, y }] });
-    await sendCmd('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+    await sendCmd('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x: r.x, y: r.top + r.h * frac }] });
+    return () => sendCmd('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
   };
   const mode = () => evalJs('document.body.dataset.mode + "/" + window.v1Game.state');
 
@@ -137,22 +142,27 @@ async function runTest() {
   await evalJs('window.v1Press(" ")'); await wait(300);
   console.log('Navegando:', await mode());
 
-  await drag('#sliderSheet', 0.7);        // folga a vela
-  await drag('#sliderRudder', 0.2);       // leme a boreste
+  (await hold('#sliderSheet', 0.3))();        // escota em ~63° (em cima = 90° solta)
   await click('#btnEngine');
-  await wait(3000);
+  const release = await hold('#sliderRudder', 0.15);   // leme a boreste, segurando
+  await wait(1500);
+  const held = await evalJs('window.v1Game.boat.rudder');
+  await release();                                      // solta: volta ao meio (leme de mola)
+  await wait(1500);
 
   const st = await evalJs(`(() => { const b = window.v1Game.boat; return {
+    
     sheet: b.sheet, rudder: b.rudder, engine: b.engine, speed: +b.speed.toFixed(2), heading: +b.heading.toFixed(1),
     engineBtnOn: document.getElementById('btnEngine').classList.contains('on'),
     canvas: (() => { const r = document.getElementById('v1GameCanvas').getBoundingClientRect(); return [Math.round(r.width), Math.round(r.height)]; })()
   }; })()`);
+  st.heldRudder = held;
   console.log('Estado:', st);
   await shot('mobile-play.png');
 
   ws.close();
   chromeProc.kill();
-  const ok = errors.length === 0 && st.sheet > 40 && st.rudder > 10 && st.engine;
+  const ok = errors.length === 0 && st.sheet > 50 && st.heldRudder > 20 && Math.abs(st.rudder) < 1 && st.engine;
   if (!ok) { console.error('FALHA', errors, st); process.exit(1); }
   console.log('Teste mobile concluído com SUCESSO!');
   process.exit(0);

@@ -318,8 +318,14 @@ class V1Renderer {
 
     const bow = [cx + f[0] * L / 2, cy + f[1] * L / 2];
     const stern = [cx - f[0] * L / 2, cy - f[1] * L / 2];
-    cga.line(Math.round(bow[0]), Math.round(bow[1]),
-             Math.round(bow[0] + f[0] * 7), Math.round(bow[1] + f[1] * 7), 1);
+
+    // flâmula indicadora de vento na proa (verde, aponta de forma firme na direção do vento)
+    const windDeg = typeof b.windTo === 'function' ? b.windTo() : ((V1_WIND_FROM + 180) % 360);
+    const wr = windDeg * Math.PI / 180;
+    const wLen = 10;
+    const wx = Math.sin(wr), wy = -Math.cos(wr);
+    const tipX = Math.round(bow[0] + wx * wLen), tipY = Math.round(bow[1] + wy * wLen);
+    cga.line(Math.round(bow[0]), Math.round(bow[1]), tipX, tipY, 1);
 
     // retranca (laranja) a partir do mastro a ~20% do casco
     const mast = [cx + f[0] * (L / 2 - L * 0.2), cy + f[1] * (L / 2 - L * 0.2)];
@@ -380,7 +386,8 @@ class V1Renderer {
     cga.text('F', 312, 120, 2);
 
     // setas de vento (apontam para onde o vento sopra)
-    const wr = ((V1_WIND_FROM + 180) % 360) * Math.PI / 180;
+    const windDeg = typeof b.windTo === 'function' ? b.windTo() : ((V1_WIND_FROM + 180) % 360);
+    const wr = windDeg * Math.PI / 180;
     for (const x of [197, 311]) {
       const y = 40, dx = Math.sin(wr) * 12, dy = -Math.cos(wr) * 12;
       cga.line(Math.round(x - dx), Math.round(y - dy), Math.round(x + dx), Math.round(y + dy), 2);

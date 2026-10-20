@@ -21,15 +21,15 @@ Reescrita para reproduzir o jogo original conforme o vídeo de referência (http
 
 | Tecla | Função |
 | :--- | :--- |
-| **4 / 5 / 6** | Leme: bombordo / centro / boreste |
+| **4 / 6** (segurar) | Leme a bombordo / boreste. O leme é de mola: ao soltar, volta ao meio (**5** solta na hora) |
 | **7 / 8 / 9** | Folgar a vela 2° / 5° / 10° |
-| **1 / 2 / 3** | Caçar a vela 2° / 5° / 10° |
+| **1 / 2 / 3** | Caçar a vela 2° / 5° / 10° (0° = toda caçada, 90° = toda solta) |
 | **E** | Motor liga/desliga (gasta combustível) |
 | **S** · **P** | Som · Pausa |
 | **Q** | Encerra a perna de treino, ou o jogo, salvando a pontuação |
 | **X** | Sai |
 
-Sem teclado numérico: **← →** leme, **↑** caça, **↓** folga.
+Sem teclado numérico: **← →** leme (segurar), **↑** caça, **↓** folga.
 
 **Menu:** (B) começar · (P) perna de treino · (A) todas as instruções · (O)bjetivo · (C)ontroles · (S)coring · (H)azards · (G)auges.
 
@@ -41,7 +41,12 @@ Sem teclado numérico: **← →** leme, **↑** caça, **↓** folga.
 
 ### 📱 Versão mobile (iPhone e iPad)
 
-`mobile.html` — só em paisagem, com o jogo em formato wide ocupando a altura toda (as 3 telas num bloco central). O menu inicial funciona por botões laterais; ao começar a perna aparecem os controles: **slider vertical do leme** (esquerda, com botão CENTER), **slider vertical da vela** (direita, IN/OUT), botão **MOTOR**, pausa e sair. iPhone/iPad abrindo `index.html` são redirecionados para ela (use `index.html?pc` para forçar a versão de PC). A versão de PC não tem os sliders.
+`mobile.html` — só em paisagem, com o jogo em formato wide ocupando a altura toda (as 3 telas num bloco central). O menu inicial funciona por botões laterais; ao começar a perna aparecem os controles:
+* **Esquerda — barra vertical do leme:** arraste para cima (boreste) ou para baixo (bombordo). É de mola: ao soltar volta ao meio.
+* **Direita — barra vertical da escota:** em cima 90° (toda solta), embaixo 0° (toda caçada); fica no último ajuste.
+* Botão **MOTOR**, pausa (||) e sair (X).
+
+iPhone/iPad que abrem `index.html` são redirecionados para ela (use `index.html?pc` para forçar a versão de PC). A versão de PC não tem as barras deslizantes.
 
 ## Versão 2 — Simulador 3D wireframe (1986)
 
