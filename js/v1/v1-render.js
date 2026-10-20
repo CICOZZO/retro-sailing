@@ -165,8 +165,8 @@ class V1Renderer {
       '(A)ll instructions', '(O)bject of the game', '(C)ontrols', '(S)coring',
       '(H)azards', '(G)auges'
     ];
-    lines.forEach((l, i) => cga.text(l, 12, 26 + i * 10, 3));
-    cga.text('TYPE OPTION', 8 + Math.floor((184 - 88) / 2), 182, 3);
+    lines.forEach((l, i) => cga.text(l, 12, 22 + i * 10, 3));
+    cga.text('TYPE OPTION', 8 + Math.floor((184 - 88) / 2), 184, 3);
   }
 
   renderInstructions(game) {
@@ -392,8 +392,8 @@ class V1Renderer {
     const cga = this.cga;
     cga.fill(200, 192, 120, 8, 3);
     cga.text(this.mmss(game.time), 200, 192, 2);
-    for (let i = 0; i < game.boats; i++) this.sprite(V1_SAIL_SPRITE, 240 + i * 9, 196);
-    cga.text(String(Math.max(0, game.score)).padStart(5, '0'), 276, 192, 2);
+    for (let i = 0; i < game.boats; i++) this.sprite(V1_SAIL_SPRITE, 245 + i * 7, 196);
+    cga.text(String(Math.max(0, game.score)).padStart(5, '0'), 280, 192, 2);
   }
 }
 

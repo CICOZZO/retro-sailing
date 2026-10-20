@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="theme-color" content="#000000">
+  <title>SAILING (1982) - Mobile</title>
+  <link rel="stylesheet" href="css/v1-mobile.css">
+</head>
+<body data-mode="title">
+  <div class="stage">
+
+    <!-- Coluna esquerda -->
+    <aside class="col col-left">
+      <div class="pane pane-menu">
+        <button class="mbtn" data-key="B">BEGIN</button>
+        <button class="mbtn" data-key="P">PRACTICE</button>
+        <button class="mbtn" data-key="X">EXIT</button>
+      </div>
+      <div class="pane pane-play">
+        <div class="slider-label">LEME</div>
+        <div class="slider-end">STBD</div>
+        <div class="slider" id="sliderRudder"><div class="track"></div><div class="tick"></div><div class="thumb"></div></div>
+        <div class="slider-end">PORT</div>
+        <button class="mbtn small" id="btnCenter">CENTER</button>
+      </div>
+    </aside>
+
+    <!-- Bloco central: somente as 3 telas -->
+    <main class="screen">
+      <canvas id="v1GameCanvas" width="320" height="200"></canvas>
+    </main>
+
+    <!-- Coluna direita -->
+    <aside class="col col-right">
+      <div class="pane pane-menu">
+        <button class="mbtn" data-key="A">ALL</button>
+        <button class="mbtn" data-key="O">OBJECT</button>
+        <button class="mbtn" data-key="C">CONTROLS</button>
+        <button class="mbtn" data-key="S">SCORING</button>
+        <button class="mbtn" data-key="H">HAZARDS</button>
+        <button class="mbtn" data-key="G">GAUGES</button>
+      </div>
+      <div class="pane pane-tap">
+        <button class="mbtn big" data-key=" ">CONTINUE</button>
+      </div>
+      <div class="pane pane-play">
+        <div class="slider-label">VELA</div>
+        <div class="slider-end">IN</div>
+        <div class="slider" id="sliderSheet"><div class="track"></div><div class="thumb"></div></div>
+        <div class="slider-end">OUT</div>
+        <button class="mbtn engine" id="btnEngine">MOTOR</button>
+        <div class="mini">
+          <button class="mbtn tiny" data-key="P">||</button>
+          <button class="mbtn tiny" data-key="Q">X</button>
+        </div>
+      </div>
+    </aside>
+  </div>
+
+  <div class="rotate-hint">GIRE O APARELHO<br>PARA O MODO PAISAGEM</div>
+
+  <script src="js/v1/v1-cga.js"></script>
+  <script src="js/v1/v1-audio.js"></script>
+  <script src="js/v1/v1-map.js"></script>
+  <script src="js/v1/v1-boat.js"></script>
+  <script src="js/v1/v1-render.js"></script>
+  <script src="js/v1/v1-game.js"></script>
+  <script src="js/v1/v1-main.js"></script>
+  <script src="js/v1/v1-mobile.js"></script>
+</body>
+</html>

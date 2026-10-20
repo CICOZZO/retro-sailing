@@ -4,6 +4,14 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>SAILING (1982 - Wind Productions) - An Adventure in the Bermuda Triangle</title>
+  <script>
+    // iPhone/iPad vão para a versão mobile (use ?pc para forçar a versão de PC)
+    (function () {
+      var ua = navigator.userAgent || '';
+      var ios = /iPhone|iPad|iPod/.test(ua) || (/Macintosh/.test(ua) && navigator.maxTouchPoints > 1);
+      if (ios && location.search.indexOf('pc') < 0) location.replace('mobile.html');
+    })();
+  </script>
   <link rel="stylesheet" href="css/v1-dynetron.css">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -43,16 +51,7 @@
         <button class="quick-btn" id="btnV1Space">[SPACE] CONTINUE</button>
       </div>
     </div>
-
-    <!-- Controles na tela (equivalem ao teclado numérico) -->
-    <div class="touch-bar">
-      <button class="t-v1-btn" id="v1PadLeft">&larr; 4 PORT</button>
-      <button class="t-v1-btn" id="v1PadCenter">5 CENTER</button>
-      <button class="t-v1-btn" id="v1PadRight">6 STBD &rarr;</button>
-      <button class="t-v1-btn" id="v1PadIn">2 SHEET IN</button>
-      <button class="t-v1-btn" id="v1PadOut">8 SHEET OUT</button>
-      <button class="t-v1-btn" id="v1PadEngine">E ENGINE</button>
-    </div>
+  </div>
 
   <!-- Scripts da Versão 1 -->
   <script src="js/v1/v1-cga.js"></script>

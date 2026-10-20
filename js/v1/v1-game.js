@@ -128,6 +128,18 @@ class V1Game {
     if (window.v1Audio) window.v1Audio.sheetClick();
   }
 
+  /** Controles deslizantes (mobile): ângulos absolutos. */
+  setRudderAngle(deg) {
+    if (this.state !== 'PLAYING' || this.paused) return;
+    const d = Math.max(-V1_MAX_RUDDER, Math.min(V1_MAX_RUDDER, deg));
+    this.boat.rudder = this.reversed ? -d : d;
+  }
+
+  setSheetAngle(deg) {
+    if (this.state !== 'PLAYING' || this.paused) return;
+    this.boat.sheet = Math.max(0, Math.min(90, deg));
+  }
+
   toggleEngine() { if (this.state === 'PLAYING') this.boat.engine = !this.boat.engine; }
   togglePause() { if (this.state === 'PLAYING') this.paused = !this.paused; }
   toggleSound() { if (window.v1Audio) window.v1Audio.toggleMute(); }

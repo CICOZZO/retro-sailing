@@ -1,0 +1,130 @@
+/* SAILING (1982) - layout mobile (iPhone / iPad), sempre em paisagem */
+
+:root {
+  --cga-brown: #aa5500;
+  --cga-red: #aa0000;
+  --cga-green: #00aa00;
+  --col: 112px;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; }
+
+html, body {
+  height: 100%;
+  background: #000;
+  overflow: hidden;
+  overscroll-behavior: none;
+  touch-action: none;
+  font-family: 'Courier New', monospace;
+}
+
+body { position: fixed; inset: 0; }
+
+.stage {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+}
+
+/* ------------------------------------------------ bloco central (as 3 telas) */
+.screen {
+  flex: 0 0 auto;
+  /* wide: ocupa a altura toda, respeitando as colunas laterais */
+  width: min(calc(100vw - 2 * var(--col) - env(safe-area-inset-left) - env(safe-area-inset-right)),
+             calc((100vh - env(safe-area-inset-top) - env(safe-area-inset-bottom)) * 1.6));
+  aspect-ratio: 8 / 5;
+}
+@supports (height: 100dvh) {
+  .screen {
+    width: min(calc(100dvw - 2 * var(--col) - env(safe-area-inset-left) - env(safe-area-inset-right)),
+               calc((100dvh - env(safe-area-inset-top) - env(safe-area-inset-bottom)) * 1.6));
+  }
+}
+#v1GameCanvas {
+  width: 100%;
+  height: 100%;
+  display: block;
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
+  background: #000;
+}
+
+/* ------------------------------------------------ colunas */
+.col {
+  flex: 0 0 var(--col);
+  height: 100%;
+  display: flex;
+  justify-content: center;
+  align-items: stretch;
+  padding: 8px 6px;
+}
+.pane { display: none; flex-direction: column; align-items: center; justify-content: center; gap: 8px; width: 100%; }
+
+/* modos: title | menu | tap | play */
+body[data-mode="menu"] .pane-menu,
+body[data-mode="tap"]  .col-right .pane-tap,
+body[data-mode="play"] .pane-play { display: flex; }
+
+.mbtn {
+  width: 100%;
+  min-height: 44px;
+  background: #000;
+  color: var(--cga-brown);
+  border: 2px solid var(--cga-brown);
+  font: bold 13px 'Courier New', monospace;
+  letter-spacing: 1px;
+  border-radius: 4px;
+  touch-action: manipulation;
+}
+.mbtn:active { background: var(--cga-brown); color: #000; }
+.mbtn.small { min-height: 36px; font-size: 12px; }
+.mbtn.big { min-height: 72px; font-size: 15px; }
+.mbtn.tiny { min-height: 36px; width: 46%; }
+.mbtn.engine { min-height: 48px; color: var(--cga-red); border-color: var(--cga-red); }
+.mbtn.engine.on { background: var(--cga-red); color: #000; }
+.mini { display: flex; gap: 6px; width: 100%; justify-content: space-between; }
+
+/* ------------------------------------------------ sliders verticais */
+.slider-label { color: var(--cga-brown); font: bold 12px 'Courier New', monospace; letter-spacing: 2px; }
+.slider-end { color: var(--cga-red); font: bold 11px 'Courier New', monospace; }
+
+.slider {
+  position: relative;
+  flex: 1 1 auto;
+  width: 64px;
+  min-height: 80px;
+  touch-action: none;
+}
+.slider .track {
+  position: absolute; left: 50%; top: 0; bottom: 0; width: 6px; margin-left: -3px;
+  background: repeating-linear-gradient(to bottom, var(--cga-red) 0 2px, #000 2px 12px);
+  border: 2px solid var(--cga-red);
+}
+.slider .tick {
+  position: absolute; left: 8px; right: 8px; top: 50%; height: 2px; margin-top: -1px;
+  background: var(--cga-green);
+}
+.slider .thumb {
+  position: absolute; left: 50%; width: 56px; height: 30px; margin: -15px 0 0 -28px;
+  top: 0;
+  background: var(--cga-brown);
+  border: 2px solid #000;
+  outline: 2px solid var(--cga-brown);
+  border-radius: 4px;
+}
+
+/* ------------------------------------------------ retrato */
+.rotate-hint {
+  display: none;
+  position: fixed; inset: 0; z-index: 10;
+  background: #000; color: var(--cga-brown);
+  align-items: center; justify-content: center; text-align: center;
+  font: bold 20px/1.6 'Courier New', monospace;
+}
+@media (orientation: portrait) { .rotate-hint { display: flex; } }
+
+/* telas baixas (iPhone em paisagem): colunas mais estreitas */
+@media (max-height: 430px) { :root { --col: 104px; } .mbtn { min-height: 38px; font-size: 12px; } }

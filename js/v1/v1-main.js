@@ -75,6 +75,8 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
+  window.v1Press = press;
+
   window.addEventListener('keydown', (e) => {
     unlock();
     let k = (e.key || '').toUpperCase();
